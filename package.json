@@ -1,5 +1,5 @@
 {
-  "name": "ethiomatch-backend",
+  "name": "ethiomatch",
   "version": "1.0.0",
   "description": "EthioMatch serious relationship matchmaking API",
   "main": "server.js",
