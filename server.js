@@ -24,8 +24,10 @@ app.use(express.json());
    ENV VARIABLES
 ====================== */
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI;
 
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 EthioMatch server running on port ${PORT}`);
+});
 /* ======================
    HEALTH CHECK (IMPORTANT FOR RENDER)
 ====================== */
@@ -59,7 +61,7 @@ app.get("/api/users", (req, res) => {
 ====================== */
 if (MONGO_URI) {
   mongoose
-    .connect(MONGO_URI)
+    .connect(mongodb+srv://firitol:<firitol>@cluster0.wd9xtjy.mongodb.net/?appName=Cluster0)
     .then(() => {
       console.log("✅ MongoDB connected successfully");
     })
