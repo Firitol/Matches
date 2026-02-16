@@ -8,8 +8,8 @@
     "axios": "^1.6.0",
     "react-router-dom": "^6.22.0"
   },
-  "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+ "scripts": {
+  "start": "node server.js"
+}
   }
 }
