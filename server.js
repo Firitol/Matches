@@ -1,4 +1,4 @@
-// server.js (Render-ready for EthioMatch)
+// server.js (FINAL FIXED - Render Stable)
 
 require("dotenv").config();
 
@@ -11,25 +11,21 @@ const compression = require("compression");
 const app = express();
 
 /* ======================
+   ENV VARIABLES (FIXED ERROR HERE)
+====================== */
+const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI || null;
+
+/* ======================
    MIDDLEWARE
 ====================== */
 app.use(helmet());
 app.use(compression());
-app.use(cors({
-  origin: "*", // Change to your frontend URL in production
-}));
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 /* ======================
-   ENV VARIABLES
-====================== */
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 EthioMatch server running on port ${PORT}`);
-});
-/* ======================
-   HEALTH CHECK (IMPORTANT FOR RENDER)
+   HEALTH ROUTES (RENDER NEEDS THIS)
 ====================== */
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -46,30 +42,38 @@ app.get("/api/health", (req, res) => {
 });
 
 /* ======================
-   SAMPLE API ROUTE (Matches / Users)
-   You can replace later with real routes
+   SAMPLE API ROUTES
 ====================== */
 app.get("/api/users", (req, res) => {
   res.json({
+    success: true,
     message: "Users endpoint working",
-    users: [],
+    data: [],
+  });
+});
+
+app.get("/api/matches", (req, res) => {
+  res.json({
+    success: true,
+    message: "Matches endpoint working",
+    matches: [],
   });
 });
 
 /* ======================
-   DATABASE CONNECTION (MongoDB Atlas)
+   DATABASE CONNECTION (SAFE)
 ====================== */
 if (MONGO_URI) {
   mongoose
-    .connect(mongodb+srv://firitol:<firitol>@cluster0.wd9xtjy.mongodb.net/?appName=Cluster0)
+    .connect(MONGO_URI)
     .then(() => {
       console.log("✅ MongoDB connected successfully");
     })
     .catch((err) => {
-      console.error("❌ MongoDB connection error:", err.message);
+      console.error("❌ MongoDB connection failed:", err.message);
     });
 } else {
-  console.warn("⚠️ MONGO_URI not found. Running without database.");
+  console.log("⚠️ No MONGO_URI provided. Running without database.");
 }
 
 /* ======================
