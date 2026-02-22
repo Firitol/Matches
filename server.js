@@ -1,103 +1,88 @@
-// server.js (FINAL FIXED - Render Stable)
-
 require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
-const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
+const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
 
 /* ======================
-   ENV VARIABLES (FIXED ERROR HERE)
+   ENV
 ====================== */
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || null;
+const MONGO_URI = process.env.MONGO_URI;
 
 /* ======================
    MIDDLEWARE
 ====================== */
 app.use(helmet());
 app.use(compression());
-app.use(cors({ origin: "*" }));
 app.use(express.json());
 
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "https://ethiomatch-frontend.onrender.com",
+    ],
+    credentials: true,
+  })
+);
+
 /* ======================
-   HEALTH ROUTES (RENDER NEEDS THIS)
+   SOCKET.IO SETUP
+====================== */
+const io = new Server(server, {
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "https://ethiomatch-frontend.onrender.com",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log("🔥 User connected:", socket.id);
+
+  socket.on("join_room", (room) => {
+    socket.join(room);
+  });
+
+  socket.on("send_message", (data) => {
+    io.to(data.room).emit("receive_message", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
+});
+
+/* ======================
+   ROUTES
 ====================== */
 app.get("/", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    message: "EthioMatch API is running 🚀",
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "healthy",
-    uptime: process.uptime(),
-  });
+  res.json({ status: "ok", message: "EthioMatch API + Socket running 🚀" });
 });
 
 /* ======================
-   SAMPLE API ROUTES
-====================== */
-app.get("/api/users", (req, res) => {
-  res.json({
-    success: true,
-    message: "Users endpoint working",
-    data: [],
-  });
-});
-
-app.get("/api/matches", (req, res) => {
-  res.json({
-    success: true,
-    message: "Matches endpoint working",
-    matches: [],
-  });
-});
-
-/* ======================
-   DATABASE CONNECTION (SAFE)
+   DATABASE
 ====================== */
 if (MONGO_URI) {
-  mongoose
-    .connect(MONGO_URI)
-    .then(() => {
-      console.log("✅ MongoDB connected successfully");
-    })
-    .catch((err) => {
-      console.error("❌ MongoDB connection failed:", err.message);
-    });
-} else {
-  console.log("⚠️ No MONGO_URI provided. Running without database.");
+  mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch((err) => console.error(err));
 }
 
 /* ======================
-   404 HANDLER
+   START SERVER
 ====================== */
-app.use((req, res) => {
-  res.status(404).json({
-    error: "Route not found",
-  });
-});
-
-/* ======================
-   GLOBAL ERROR HANDLER
-====================== */
-app.use((err, req, res, next) => {
-  console.error("🔥 Server Error:", err.stack);
-  res.status(500).json({
-    error: "Internal Server Error",
-  });
-});
-
-/* ======================
-   START SERVER (CRITICAL FOR RENDER)
-====================== */
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 EthioMatch server running on port ${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
