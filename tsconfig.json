@@ -1,1 +1,11 @@
-// Placeholder for tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "moduleResolution": "Node",
+    "strict": true,
+    "skipLibCheck": true
+
+  }
+}
