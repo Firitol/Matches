@@ -1,3 +1,4 @@
+<!-- views/partials/footer.ejs -->
     </main>
 
     <footer class="footer">
@@ -28,11 +29,18 @@
         </div>
         
         <div class="footer-bottom">
-            <p>&copy; <%= new Date().getFullYear() %> EthioMatch. All rights reserved.</p>
+            <p>&copy; <%= typeof currentYear !== 'undefined' ? currentYear : new Date().getFullYear() %> EthioMatch. All rights reserved.</p>
             <p>For serious relationships only. 18+</p>
         </div>
     </footer>
 
-    <script src="/js/main.js"></script>
+    <script>
+        // Alert auto-close
+        document.querySelectorAll('.alert-close').forEach(btn => {
+            btn.addEventListener('click', function() {
+                this.closest('.alert').remove();
+            });
+        });
+    </script>
 </body>
 </html>
