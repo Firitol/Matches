@@ -1,26 +1,100 @@
-
 {
   "version": 2,
-
   "builds": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build"
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
     },
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
-
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js"
+      "src": "/public/(.*)",
+      "dest": "/public/$1"
+    },
+    {
+      "src": "/styles.css",
+      "dest": "/public/styles.css"
+    },
+    {
+      "src": "/js/(.*)",
+      "dest": "/public/js/$1"
+    },
+    {
+      "src": "/images/(.*)",
+      "dest": "/public/images/$1"
+    },
+    {
+      "src": "/health",
+      "dest": "/api/health.js"
+    },
+    {
+      "src": "/register",
+      "methods": ["GET"],
+      "dest": "/api/auth/register.js"
+    },
+    {
+      "src": "/register",
+      "methods": ["POST"],
+      "dest": "/api/auth/register.js"
+    },
+    {
+      "src": "/login",
+      "methods": ["GET"],
+      "dest": "/api/auth/login.js"
+    },
+    {
+      "src": "/login",
+      "methods": ["POST"],
+      "dest": "/api/auth/login.js"
+    },
+    {
+      "src": "/logout",
+      "dest": "/api/auth/logout.js"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/api/user/dashboard.js"
+    },
+    {
+      "src": "/profile",
+      "methods": ["GET"],
+      "dest": "/api/user/profile.js"
+    },
+    {
+      "src": "/profile",
+      "methods": ["POST"],
+      "dest": "/api/user/profile.js"
+    },
+    {
+      "src": "/matches",
+      "dest": "/api/match/matches.js"
+    },
+    {
+      "src": "/like/(.*)",
+      "dest": "/api/match/like.js"
+    },
+    {
+      "src": "/messages(.*)",
+      "dest": "/api/match/messages.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/frontend/dist/$1"
+      "dest": "/api/index.js"
     }
-  ]
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "MONGODB_URI": "@mongodb_uri",
+      "SESSION_PASSWORD": "@session_password",
+      "CSRF_SECRET": "@csrf_secret",
+      "BASE_URL": "@base_url"
+    }
+  }
 }
