@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="EthioMatch - Find serious relationships in Ethiopia">
+    <title><%= title %> - EthioMatch</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/png" href="/images/favicon.png">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span class="logo-icon">🇪🇹</span>
+                <span class="logo-text">EthioMatch</span>
+            </a>
+            
+            <% if (user) { %>
+                <div class="nav-menu">
+                    <a href="/dashboard" class="nav-link">Dashboard</a>
+                    <a href="/matches" class="nav-link">Matches</a>
+                    <a href="/profile" class="nav-link">Profile</a>
+                    <a href="/logout" class="nav-link nav-logout">Logout</a>
+                </div>
+            <% } else { %>
+                <div class="nav-menu">
+                    <a href="/login" class="nav-link">Login</a>
+                    <a href="/register" class="nav-link nav-cta">Join Free</a>
+                </div>
+            <% } %>
+            
+            <button class="nav-toggle" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <% if (success && success.length > 0) { %>
+        <div class="alert alert-success">
+            <% success.forEach(msg => { %>
+                <p><%= msg %></p>
+            <% }) %>
+            <button class="alert-close">&times;</button>
+        </div>
+    <% } %>
+
+    <% if (error && error.length > 0) { %>
+        <div class="alert alert-error">
+            <% error.forEach(msg => { %>
+                <p><%= msg %></p>
+            <% }) %>
+            <button class="alert-close">&times;</button>
+        </div>
+    <% } %>
+
+    <% if (warning && warning.length > 0) { %>
+        <div class="alert alert-warning">
+            <% warning.forEach(msg => { %>
+                <p><%= msg %></p>
+            <% }) %>
+            <button class="alert-close">&times;</button>
+        </div>
+    <% } %>
+
+    <main class="main-content">
