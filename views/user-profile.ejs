@@ -1,0 +1,466 @@
+<%- include('partials/header') %>
+
+<div class="user-profile-container">
+    <!-- Profile Header -->
+    <div class="profile-header-card">
+        <div class="profile-header-content">
+            <div class="profile-avatar-large">
+                <%= getAvatarEmoji(profileUser.gender) %>
+                <% if (typeof isOnline !== 'undefined' && isOnline(profileUser.lastActive)) { %>
+                    <span class="online-indicator-large"></span>
+                <% } %>
+            </div>
+            <div class="profile-header-info">
+                <h1><%= profileUser.username %>, <%= profileUser.age %></h1>
+                <p class="profile-header-location">📍 <%= profileUser.location %></p>
+                <div class="profile-header-meta">
+                    <% if (typeof isOnline !== 'undefined' && isOnline(profileUser.lastActive)) { %>
+                        <span class="badge badge-success">🟢 Online now</span>
+                    <% } else { %>
+                        <span class="badge badge-secondary">⚪ Last active: <%= formatRelativeTime(profileUser.lastActive) %></span>
+                    <% } %>
+                    <span class="badge badge-info">Member since <%= formatDate(profileUser.createdAt) %></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="profile-actions">
+            <% if (typeof isMatched !== 'undefined' && isMatched) { %>
+                <a href="/messages" class="btn btn-primary btn-large">💬 Send Message</a>
+                <button class="btn btn-outline" onclick="showReportModal()">⚠️ Report</button>
+            <% } else { %>
+                <button class="btn btn-primary btn-large" onclick="likeUser('<%= profileUser._id %>')">
+                    ❤️ Send Like
+                </button>
+                <button class="btn btn-outline" onclick="passUser('<%= profileUser._id %>')">
+                    ❌ Pass
+                </button>
+            <% } %>
+            <button class="btn btn-warning" onclick="blockUser('<%= profileUser._id %>')">
+                🚫 Block
+            </button>
+        </div>
+    </div>
+
+    <!-- Profile Details -->
+    <div class="profile-details-grid">
+        <!-- About Section -->
+        <div class="profile-section">
+            <h3>📝 About Me</h3>
+            <p class="profile-bio"><%= profileUser.bio || 'No bio provided yet.' %></p>
+        </div>
+
+        <!-- Interests Section -->
+        <% if (profileUser.interests && profileUser.interests.length > 0) { %>
+            <div class="profile-section">
+                <h3>🎯 Interests</h3>
+                <div class="interests-list">
+                    <% profileUser.interests.forEach(interest => { %>
+                        <span class="interest-tag-large"><%= interest %></span>
+                    <% }) %>
+                </div>
+            </div>
+        <% } %>
+
+        <!-- Looking For -->
+        <div class="profile-section">
+            <h3>💕 Looking For</h3>
+            <p><strong><%= profileUser.lookingFor %></strong> for a serious relationship</p>
+        </div>
+
+        <!-- Compatibility (Future Feature) -->
+        <div class="profile-section">
+            <h3>✨ Compatibility</h3>
+            <div class="compatibility-meter">
+                <div class="compatibility-bar">
+                    <div class="compatibility-fill" style="width: <%= typeof compatibility !== 'undefined' ? compatibility : 75 %>%"></div>
+                </div>
+                <span class="compatibility-score"><%= typeof compatibility !== 'undefined' ? compatibility : 75 %>% Match</span>
+            </div>
+            <p class="compatibility-note">Based on shared interests and preferences</p>
+        </div>
+    </div>
+
+    <!-- Safety Notice -->
+    <div class="safety-notice">
+        <h4>🛡️ Stay Safe on EthioMatch</h4>
+        <ul>
+            <li>Never share financial information or send money</li>
+            <li>Meet in public places for first dates</li>
+            <li>Trust your instincts - if something feels off, report it</li>
+            <li>Keep conversations on EthioMatch until you're comfortable</li>
+        </ul>
+        <a href="#" class="safety-link">Read Full Safety Guidelines →</a>
+    </div>
+</div>
+
+<!-- Report Modal (Hidden by Default) -->
+<div id="reportModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeReportModal()">&times;</span>
+        <h3>Report <%= profileUser.username %></h3>
+        <p>Why are you reporting this user?</p>
+        <form id="reportForm" onsubmit="submitReport(event)">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <select name="reason" required class="modal-select">
+                <option value="">Select a reason...</option>
+                <option value="Fake profile">Fake or misleading profile</option>
+                <option value="Inappropriate content">Inappropriate messages or content</option>
+                <option value="Harassment">Harassment or bullying</option>
+                <option value="Spam">Spam or scam attempts</option>
+                <option value="Underage">Suspected underage user</option>
+                <option value="Other">Other reason</option>
+            </select>
+            <textarea name="details" placeholder="Additional details (optional)" rows="3" class="modal-textarea"></textarea>
+            <button type="submit" class="btn btn-danger">Submit Report</button>
+        </form>
+    </div>
+</div>
+
+<script>
+// Like user function
+async function likeUser(userId) {
+    try {
+        const response = await fetch(`/like/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '<%= csrfToken %>'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (data.isMatch) {
+                alert("🎉 It's a match! You can now message each other.");
+                window.location.href = '/matches';
+            } else {
+                alert('❤️ Like sent! We will notify you if they like you back.');
+            }
+        } else {
+            alert('✗ ' + (data.message || 'Failed to send like'));
+        }
+    } catch (error) {
+        console.error('Like error:', error);
+        alert('✗ Failed to send like. Please try again.');
+    }
+}
+
+// Pass user function
+function passUser(userId) {
+    if (confirm('Skip this profile? You can always find them again later.')) {
+        window.history.back();
+    }
+}
+
+// Block user function
+async function blockUser(userId) {
+    if (!confirm(`Block ${profileUser.username}? You won't see each other's profiles anymore.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/user/${userId}/block`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '<%= csrfToken %>'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✓ User blocked successfully.');
+            window.location.href = '/dashboard';
+        } else {
+            alert('✗ ' + (data.message || 'Failed to block user'));
+        }
+    } catch (error) {
+        console.error('Block error:', error);
+        alert('✗ Failed to block user. Please try again.');
+    }
+}
+
+// Report modal functions
+function showReportModal() {
+    document.getElementById('reportModal').style.display = 'flex';
+}
+
+function closeReportModal() {
+    document.getElementById('reportModal').style.display = 'none';
+}
+
+async function submitReport(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    try {
+        const response = await fetch(`/user/<%= profileUser._id %>/report`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '<%= csrfToken %>'
+            },
+            body: JSON.stringify({
+                reason: formData.get('reason'),
+                details: formData.get('details')
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✓ Report submitted. Thank you for keeping our community safe.');
+            closeReportModal();
+            form.reset();
+        } else {
+            alert('✗ ' + (data.message || 'Failed to submit report'));
+        }
+    } catch (error) {
+        console.error('Report error:', error);
+        alert('✗ Failed to submit report. Please try again.');
+    }
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('reportModal');
+    if (event.target === modal) {
+        closeReportModal();
+    }
+}
+</script>
+
+<style>
+    .user-profile-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    .profile-header-card {
+        background: var(--card-background);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    .profile-header-content {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .profile-avatar-large {
+        position: relative;
+        font-size: 5rem;
+        flex-shrink: 0;
+    }
+    .online-indicator-large {
+        position: absolute;
+        bottom: 15px;
+        right: 15px;
+        width: 25px;
+        height: 25px;
+        background: var(--success-color);
+        border: 4px solid white;
+        border-radius: 50%;
+    }
+    .profile-header-info h1 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text-color);
+        font-size: 2rem;
+    }
+    .profile-header-location {
+        color: var(--text-light);
+        margin-bottom: 0.75rem;
+    }
+    .profile-header-meta {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .badge-success { background: #e8f5e9; color: #2e7d32; }
+    .badge-secondary { background: #f5f5f5; color: var(--text-light); }
+    .badge-info { background: #e3f2fd; color: #1976d2; }
+    .profile-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-color);
+    }
+    .btn-large {
+        padding: 0.875rem 2rem;
+        font-size: 1.05rem;
+    }
+    .btn-outline {
+        background: transparent;
+        border: 2px solid var(--border-color);
+        color: var(--text-color);
+    }
+    .btn-outline:hover {
+        background: var(--background-color);
+        border-color: var(--primary-color);
+    }
+    .profile-details-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    .profile-section {
+        background: var(--card-background);
+        padding: 1.5rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+    }
+    .profile-section h3 {
+        margin-bottom: 1rem;
+        color: var(--text-color);
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 0.5rem;
+    }
+    .profile-bio {
+        line-height: 1.6;
+        color: var(--text-color);
+    }
+    .interests-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .interest-tag-large {
+        background: rgba(211, 47, 47, 0.1);
+        color: var(--primary-color);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+    }
+    .compatibility-meter {
+        margin: 1rem 0;
+    }
+    .compatibility-bar {
+        height: 12px;
+        background: var(--border-color);
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+    }
+    .compatibility-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        border-radius: 6px;
+        transition: width 0.5s ease;
+    }
+    .compatibility-score {
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+    .compatibility-note {
+        font-size: 0.85rem;
+        color: var(--text-light);
+    }
+    .safety-notice {
+        background: #fff8e1;
+        border-left: 4px solid var(--warning-color);
+        padding: 1.5rem;
+        border-radius: 0 var(--border-radius) var(--border-radius) 0;
+        margin-top: 1rem;
+    }
+    .safety-notice h4 {
+        margin-bottom: 0.75rem;
+        color: #ef6c00;
+    }
+    .safety-notice ul {
+        margin: 0 0 1rem 0;
+        padding-left: 1.5rem;
+        color: var(--text-light);
+    }
+    .safety-notice li {
+        margin-bottom: 0.25rem;
+    }
+    .safety-link {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 500;
+    }
+    .safety-link:hover {
+        text-decoration: underline;
+    }
+    /* Modal Styles */
+    .modal {
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    }
+    .modal-content {
+        background: var(--card-background);
+        padding: 2rem;
+        border-radius: var(--border-radius);
+        width: 90%;
+        max-width: 500px;
+        box-shadow: var(--shadow-hover);
+    }
+    .modal-close {
+        float: right;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--text-light);
+    }
+    .modal-close:hover {
+        color: var(--text-color);
+    }
+    .modal h3 {
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    .modal-select, .modal-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        font-family: inherit;
+        font-size: 1rem;
+    }
+    .modal-select:focus, .modal-textarea:focus {
+        outline: none;
+        border-color: var(--primary-color);
+    }
+    @media (max-width: 768px) {
+        .profile-header-content {
+            flex-direction: column;
+            text-align: center;
+        }
+        .profile-actions {
+            justify-content: center;
+        }
+        .profile-details-grid {
+            grid-template-columns: 1fr;
+        }
+        .user-profile-container {
+            padding: 1rem;
+        }
+    }
+</style>
+
+<%- include('partials/footer') %>
