@@ -1,46 +1,7 @@
-
-    </main>
-
-    <footer class="footer">
-        <div class="footer-container">
-            <div class="footer-section">
-                <h3>🇪🇹 EthioMatch</h3>
-                <p>Find serious relationships with Ethiopians worldwide.</p>
-                <p class="age-warning">⚠️ 18+ Only</p>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Quick Links</h4>
-                <ul>
-                    <li><a href="/register">Join Now</a></li>
-                    <li><a href="/login">Login</a></li>
-                    <li><a href="/dashboard">Dashboard</a></li>
-                </ul>
-            </div>
-            
-            <div class="footer-section">
-                <h4>Support</h4>
-                <ul>
-                    <li><a href="#">Safety Tips</a></li>
-                    <li><a href="#">Report User</a></li>
-                    <li><a href="#">Contact Us</a></li>
-                </ul>
-            </div>
-        </div>
-        
-        <div class="footer-bottom">
-            <p>&copy; <%= typeof currentYear !== 'undefined' ? currentYear : new Date().getFullYear() %> EthioMatch. All rights reserved.</p>
-            <p>For serious relationships only. 18+</p>
-        </div>
-    </footer>
-
-    <script>
-        // Alert auto-close
-        document.querySelectorAll('.alert-close').forEach(btn => {
-            btn.addEventListener('click', function() {
-                this.closest('.alert').remove();
-            });
-        });
-    </script>
+  </main>
+  <footer style="background:#2c3e50;color:#fff;padding:2rem;text-align:center;margin-top:auto">
+    <p>&copy; <%= typeof currentYear !== 'undefined' ? currentYear : new Date().getFullYear() %> EthioMatch</p>
+    <p style="font-size:0.9rem;opacity:0.8">⚠️ 18+ Only</p>
+  </footer>
 </body>
 </html>
