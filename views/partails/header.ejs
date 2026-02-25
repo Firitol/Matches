@@ -1,12 +1,21 @@
+<!-- views/partials/header.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="EthioMatch - Find serious relationships in Ethiopia">
-    <title><%= title %> - EthioMatch</title>
+    <title><%= typeof title !== 'undefined' ? title : 'EthioMatch' %> - EthioMatch</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="icon" type="image/png" href="/images/favicon.png">
+    <style>
+        /* Critical CSS for error pages */
+        .alert { padding: 1rem 2rem; margin: 1rem auto; max-width: 1200px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .alert-success { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #4caf50; }
+        .alert-error { background: #ffebee; color: #c62828; border-left: 4px solid #f44336; }
+        .alert-warning { background: #fff3e0; color: #ef6c00; border-left: 4px solid #ff9800; }
+        .alert-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -16,7 +25,7 @@
                 <span class="logo-text">EthioMatch</span>
             </a>
             
-            <% if (user) { %>
+            <% if (typeof user !== 'undefined' && user) { %>
                 <div class="nav-menu">
                     <a href="/dashboard" class="nav-link">Dashboard</a>
                     <a href="/matches" class="nav-link">Matches</a>
@@ -29,38 +38,26 @@
                     <a href="/register" class="nav-link nav-cta">Join Free</a>
                 </div>
             <% } %>
-            
-            <button class="nav-toggle" aria-label="Toggle navigation">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
         </div>
     </nav>
 
-    <% if (success && success.length > 0) { %>
+    <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
         <div class="alert alert-success">
-            <% success.forEach(msg => { %>
-                <p><%= msg %></p>
-            <% }) %>
+            <% success.forEach(msg => { %><p><%= msg %></p><% }) %>
             <button class="alert-close">&times;</button>
         </div>
     <% } %>
 
-    <% if (error && error.length > 0) { %>
+    <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
         <div class="alert alert-error">
-            <% error.forEach(msg => { %>
-                <p><%= msg %></p>
-            <% }) %>
+            <% error.forEach(msg => { %><p><%= msg %></p><% }) %>
             <button class="alert-close">&times;</button>
         </div>
     <% } %>
 
-    <% if (warning && warning.length > 0) { %>
+    <% if (typeof warning !== 'undefined' && warning && warning.length > 0) { %>
         <div class="alert alert-warning">
-            <% warning.forEach(msg => { %>
-                <p><%= msg %></p>
-            <% }) %>
+            <% warning.forEach(msg => { %><p><%= msg %></p><% }) %>
             <button class="alert-close">&times;</button>
         </div>
     <% } %>
