@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - EthioMatch</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <nav>
+        <div class="logo">EthioMatch ❤️</div>
+        <a href="/logout" class="btn-logout">Logout</a>
+    </nav>
+
+    <div class="container main-content">
+        <h2>Hello, <%= user.username %>!</h2>
+        <p>Here are potential matches for a serious relationship:</p>
+
+        <div class="matches-grid">
+            <% if (matches.length === 0) { %>
+                <p>No matches found yet. Try changing your preferences later.</p>
+            <% } else { %>
+                <% matches.forEach(match => { %>
+                    <div class="match-card">
+                        <div class="avatar"><%= match.gender === 'Male' ? '👨' : '👩' %></div>
+                        <h3><%= match.username %>, <%= match.age %></h3>
+                        <p><%= match.bio %></p>
+                        <button class="btn-like">Send Interest</button>
+                    </div>
+                <% }) %>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>

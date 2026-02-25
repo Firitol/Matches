@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Join EthioMatch</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="auth-page">
+    <div class="container">
+        <h1>🇪🇹 EthioMatch</h1>
+        <h2>Create Account (18+)</h2>
+        <form action="/register" method="POST">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="number" name="age" placeholder="Age" min="18" required>
+            <select name="gender" required>
+                <option value="" disabled selected>I am a...</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+            </select>
+            <select name="lookingFor" required>
+                <option value="" disabled selected>Looking for...</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+            </select>
+            <button type="submit">Start Matching</button>
+        </form>
+        <p>Already have an account? <a href="/login">Login</a></p>
+    </div>
+</body>
+</html>
