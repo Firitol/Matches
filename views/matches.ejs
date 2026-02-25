@@ -1,0 +1,210 @@
+<%- include('partials/header') %>
+
+<div class="matches-container">
+    <div class="matches-header">
+        <h1>💕 My Matches</h1>
+        <p>People you've connected with</p>
+    </div>
+
+    <% if (matches && matches.length > 0) { %>
+        <div class="matches-grid">
+            <% matches.forEach(match => { %>
+                <div class="match-card">
+                    <div class="match-avatar">
+                        <%= getAvatarEmoji(match.gender) %>
+                        <% if (typeof isOnline !== 'undefined' && isOnline(match.lastActive)) { %>
+                            <span class="online-indicator"></span>
+                        <% } %>
+                    </div>
+                    <div class="match-info">
+                        <h3><%= match.username %>, <%= match.age %></h3>
+                        <p class="match-location">📍 <%= match.location %></p>
+                        
+                        <% if (match.bio) { %>
+                            <p class="match-bio"><%= truncateText(match.bio, 100) %></p>
+                        <% } %>
+                        
+                        <% if (match.interests && match.interests.length > 0) { %>
+                            <div class="match-interests">
+                                <% match.interests.slice(0, 3).forEach(interest => { %>
+                                    <span class="interest-tag"><%= interest %></span>
+                                <% }) %>
+                                <% if (match.interests.length > 3) { %>
+                                    <span class="interest-tag">+<%= match.interests.length - 3 %> more</span>
+                                <% } %>
+                            </div>
+                        <% } %>
+                    </div>
+                    <div class="match-actions">
+                        <a href="/messages/<%= match._id %>" class="btn btn-primary">💬 Message</a>
+                        <a href="/user/<%= match._id %>" class="btn btn-secondary">👤 View Profile</a>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+    <% } else { %>
+        <div class="no-matches">
+            <div class="no-matches-icon">💔</div>
+            <h3>No matches yet</h3>
+            <p>Keep browsing profiles and sending likes. Your perfect match is out there!</p>
+            <a href="/dashboard" class="btn btn-primary">Find Potential Matches</a>
+        </div>
+    <% } %>
+
+    <!-- Match Tips -->
+    <div class="matches-tips">
+        <h3>💡 Tips for Better Matches</h3>
+        <ul>
+            <li><strong>Complete your profile:</strong> Add a bio and interests to attract compatible matches</li>
+            <li><strong>Be authentic:</strong> Genuine profiles get more meaningful connections</li>
+            <li><strong>Stay active:</strong> Regular activity increases your visibility</li>
+            <li><strong>Be respectful:</strong> Treat others as you'd like to be treated</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+    .matches-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    .matches-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .matches-header h1 {
+        color: var(--primary-color);
+        margin-bottom: 0.5rem;
+    }
+    .matches-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+    .match-card {
+        background: var(--card-background);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        transition: var(--transition);
+        display: flex;
+        flex-direction: column;
+    }
+    .match-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-hover);
+    }
+    .match-avatar {
+        position: relative;
+        font-size: 4rem;
+        text-align: center;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .online-indicator {
+        position: absolute;
+        bottom: 15px;
+        right: 15px;
+        width: 20px;
+        height: 20px;
+        background: var(--success-color);
+        border: 3px solid white;
+        border-radius: 50%;
+    }
+    .match-info {
+        padding: 1.5rem;
+        flex: 1;
+    }
+    .match-info h3 {
+        margin-bottom: 0.25rem;
+        color: var(--text-color);
+    }
+    .match-location {
+        color: var(--text-light);
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    .match-bio {
+        color: var(--text-color);
+        margin: 0.5rem 0;
+        line-height: 1.4;
+    }
+    .match-interests {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin: 1rem 0;
+    }
+    .match-actions {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        gap: 0.5rem;
+    }
+    .match-actions .btn {
+        flex: 1;
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    .no-matches {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: var(--card-background);
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        margin-bottom: 3rem;
+    }
+    .no-matches-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+    .no-matches h3 {
+        margin-bottom: 0.5rem;
+        color: var(--text-color);
+    }
+    .no-matches p {
+        color: var(--text-light);
+        margin-bottom: 1.5rem;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .matches-tips {
+        background: var(--card-background);
+        padding: 2rem;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow);
+        margin-top: 2rem;
+    }
+    .matches-tips h3 {
+        margin-bottom: 1rem;
+        color: var(--primary-color);
+    }
+    .matches-tips ul {
+        list-style: none;
+        padding: 0;
+    }
+    .matches-tips li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-light);
+    }
+    .matches-tips li:last-child {
+        border-bottom: none;
+    }
+    .matches-tips strong {
+        color: var(--text-color);
+    }
+    @media (max-width: 768px) {
+        .matches-grid {
+            grid-template-columns: 1fr;
+        }
+        .match-actions {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<%- include('partials/footer') %>
