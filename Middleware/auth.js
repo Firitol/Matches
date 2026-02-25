@@ -1,3 +1,4 @@
+// middleware/auth.js
 const User = require('../models/User');
 
 exports.requireLogin = async (req, res, next) => {
