@@ -1,4 +1,6 @@
+// server.js
 require('dotenv').config();
+
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
@@ -10,23 +12,71 @@ const { doubleCsrf } = require('csrf-csrf');
 const path = require('path');
 const flash = require('express-flash');
 
+// Import Utils
+const logger = require('./utils/logger');
+const constants = require('./utils/constants');
+const { formatDate } = require('./utils/helpers');
+
+// Import Routes
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/user');
+const matchRoutes = require('./routes/match');
+
+// Import Models
+const User = require('./models/User');
+
 const app = express();
 
-// Security middleware
+// ============================================
+// 🛡️ SECURITY MIDDLEWARE
+// ============================================
+
+// Helmet for security headers
 app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+// Rate limiting for API routes
+const apiLimiter = rateLimit({
+  windowMs: constants.RATE_LIMIT_WINDOW_MS,
+  max: constants.RATE_LIMIT_MAX_REQUESTS,
+  message: {
+    success: false,
+    message: constants.MESSAGES.RATE_LIMITED
+  },
+  standardHeaders: true,
+  legacyHeaders: false
 });
-app.use('/api/', limiter);
 
-// CSRF Protection
+// Stricter rate limit for auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: constants.AUTH_RATE_LIMIT_MAX,
+  message: {
+    success: false,
+    message: 'Too many login attempts, please try again later'
+  }
+});
+
+app.use('/api/', apiLimiter);
+app.use('/login', authLimiter);
+app.use('/register', authLimiter);
+
+// ============================================
+// 🔐 CSRF PROTECTION
+// ============================================
+
 const { generateToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET,
   cookieName: '__Host-psyi.xsrf.token',
@@ -39,85 +89,202 @@ const { generateToken, doubleCsrfProtection } = doubleCsrf({
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS']
 });
 
+// Add CSRF token to all responses
 app.use((req, res, next) => {
   res.locals.csrfToken = generateToken(req, res);
   next();
 });
 
-// Database connection
+// ============================================
+// 🗄️ DATABASE CONNECTION
+// ============================================
+
 mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 5000
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
 })
-.then(() => console.log('✅ MongoDB Connected'))
+.then(() => {
+  logger.info('✅ MongoDB Connected Successfully', {
+    database: mongoose.connection.name
+  });
+})
 .catch(err => {
-  console.error('❌ MongoDB Connection Error:', err);
+  logger.error('❌ MongoDB Connection Error', {
+    error: err.message,
+    stack: err.stack
+  });
   process.exit(1);
 });
 
-// Session configuration
+// MongoDB connection event listeners
+mongoose.connection.on('error', err => {
+  logger.error('MongoDB connection error', { error: err.message });
+});
+
+mongoose.connection.on('disconnected', () => {
+  logger.warn('MongoDB disconnected');
+});
+
+// ============================================
+// 📦 SESSION CONFIGURATION
+// ============================================
+
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({ 
     mongoUrl: process.env.MONGODB_URI,
-    ttl: 24 * 60 * 60 // 1 day
+    ttl: constants.SESSION_MAX_AGE / 1000,
+    autoRemove: 'native'
   }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: constants.SESSION_MAX_AGE,
+    sameSite: 'lax'
   },
   name: 'ethiomatch.sid'
 }));
 
-// View engine
+// ============================================
+// 🎨 VIEW ENGINE & STATIC FILES
+// ============================================
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(morgan('combined'));
+// Static files
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d',
+  etag: true
+}));
+
+// ============================================
+// 📝 REQUEST PARSING & LOGGING
+// ============================================
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Morgan HTTP logging
+app.use(morgan('combined', {
+  stream: {
+    write: (message) => {
+      const [method, url, status, duration] = message.split(' ');
+      logger.info('HTTP Request', {
+        method: method.trim(),
+        url: url.trim(),
+        status: parseInt(status),
+        duration: duration.trim()
+      });
+    }
+  }
+}));
+
+// ============================================
+// 🛡️ CSRF & FLASH MESSAGES
+// ============================================
+
 app.use(doubleCsrfProtection);
 app.use(flash());
 
-// Global variables for views
+// ============================================
+// 🌍 GLOBAL VARIABLES FOR VIEWS
+// ============================================
+
 app.use((req, res, next) => {
+  // Make user available to all views
   res.locals.user = req.session.userId ? req.user : null;
+  
+  // Flash messages
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.warning = req.flash('warning');
   res.locals.info = req.flash('info');
+  
+  // App info
+  res.locals.appName = constants.APP_NAME;
+  res.locals.appVersion = constants.APP_VERSION;
+  res.locals.currentYear = new Date().getFullYear();
+  
+  // Helper functions for views
+  res.locals.formatDate = formatDate;
+  res.locals.formatRelativeTime = require('./utils/helpers').formatRelativeTime;
+  res.locals.getAvatarEmoji = require('./utils/helpers').getAvatarEmoji;
+  res.locals.truncateText = require('./utils/helpers').truncateText;
+  res.locals.isOnline = require('./utils/helpers').isOnline;
+  
   next();
 });
 
-// Routes
-app.use('/', require('./routes/auth'));
-app.use('/', require('./routes/user'));
-app.use('/', require('./routes/match'));
+// ============================================
+// 🚦 ROUTES
+// ============================================
 
-// Home redirect
+// Health check for Render monitoring
+app.get('/health', (req, res) => {
+  const healthStatus = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  };
+  
+  logger.info('Health check performed', { status: healthStatus.status });
+  res.status(200).json(healthStatus);
+});
+
+// API Ping for keeping session alive
+app.post('/api/ping', (req, res) => {
+  if (req.session.userId) {
+    User.findById(req.session.userId)
+      .then(user => {
+        if (user) {
+          user.updateLastActive();
+        }
+      })
+      .catch(err => logger.error('Ping error', { error: err.message }));
+  }
+  res.json({ success: true, timestamp: new Date().toISOString() });
+});
+
+// Home route
 app.get('/', (req, res) => {
   if (req.session.userId) {
+    logger.info('User redirected to dashboard', { userId: req.session.userId });
     res.redirect('/dashboard');
   } else {
-    res.render('index', { title: 'Welcome to EthioMatch' });
+    logger.info('Home page visited', { ip: req.ip });
+    res.render('index', { 
+      title: 'Welcome',
+      tagline: constants.APP_TAGLINE
+    });
   }
 });
 
-// Health check for Render
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
+// Auth routes
+app.use('/', authRoutes);
 
-// 404 handler
+// User routes (require login)
+app.use('/', userRoutes);
+
+// Match routes (require login)
+app.use('/', matchRoutes);
+
+// ============================================
+// ❌ 404 HANDLER
+// ============================================
+
 app.use((req, res) => {
+  logger.warn('404 - Page not found', {
+    url: req.url,
+    method: req.method,
+    ip: req.ip
+  });
+  
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
@@ -125,32 +292,107 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
+// ============================================
+// 🚨 GLOBAL ERROR HANDLER
+// ============================================
+
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  logger.error('Unhandled Error', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip
+  });
+  
+  // Don't leak error details in production
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   res.status(err.status || 500).render('error', {
     title: 'Error',
-    message: process.env.NODE_ENV === 'production' 
-      ? 'Something went wrong' 
-      : err.message,
-    error: process.env.NODE_ENV === 'production' ? {} : err
+    message: isProduction ? constants.MESSAGES.ERROR : err.message,
+    error: isProduction ? {} : err
   });
 });
 
-// Start server
+// ============================================
+// 🚀 START SERVER
+// ============================================
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 EthioMatch running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+const server = app.listen(PORT, () => {
+  logger.info('🚀 EthioMatch Server Started', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    pid: process.pid
+  });
+  
+  console.log(`
+  ╔═══════════════════════════════════════════╗
+  ║  🇪🇹  EthioMatch - Serious Relationships  ║
+  ╠═══════════════════════════════════════════╣
+  ║  Port: ${PORT}                            ║
+  ║  Environment: ${process.env.NODE_ENV || 'development'}              ║
+  ║  Node Version: ${process.version}                     ║
+  ║  Status: Running ✅                      ║
+  ╚═══════════════════════════════════════════╝
+  `);
 });
 
-// Graceful shutdown
+// ============================================
+// 🛑 GRACEFUL SHUTDOWN
+// ============================================
+
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  mongoose.connection.close(() => {
-    console.log('MongoDB connection closed');
-    process.exit(0);
+  logger.info('SIGTERM received, shutting down gracefully');
+  
+  server.close(() => {
+    logger.info('HTTP server closed');
+    
+    mongoose.connection.close(() => {
+      logger.info('MongoDB connection closed');
+      process.exit(0);
+    });
   });
 });
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  
+  server.close(() => {
+    logger.info('HTTP server closed');
+    
+    mongoose.connection.close(() => {
+      logger.info('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', {
+    error: err.message,
+    stack: err.stack
+  });
+  
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', {
+    reason: reason?.message || reason,
+    promise: promise
+  });
+});
+
+// ============================================
+// 📤 EXPORT FOR TESTING
+// ============================================
 
 module.exports = app;
