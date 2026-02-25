@@ -1,34 +1,130 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Dashboard - EthioMatch</title>
-    <link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-    <nav>
-        <div class="logo">EthioMatch ❤️</div>
-        <a href="/logout" class="btn-logout">Logout</a>
-    </nav>
+<%- include('partials/header') %>
 
-    <div class="container main-content">
-        <h2>Hello, <%= user.username %>!</h2>
-        <p>Here are potential matches for a serious relationship:</p>
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Welcome, <%= user.username %>! 👋</h1>
+        <p>Find your serious relationship match</p>
+    </div>
 
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">❤️</div>
+            <div class="stat-info">
+                <h3><%= matchCount %></h3>
+                <p>Matches</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">👁️</div>
+            <div class="stat-info">
+                <h3><%= potentialMatches.length %></h3>
+                <p>Potential Matches</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📍</div>
+            <div class="stat-info">
+                <h3><%= user.location %></h3>
+                <p>Location</p>
+            </div>
+        </div>
+    </div>
+
+    <section class="matches-section">
+        <h2>Potential Matches</h2>
         <div class="matches-grid">
-            <% if (matches.length === 0) { %>
-                <p>No matches found yet. Try changing your preferences later.</p>
+            <% if (potentialMatches.length === 0) { %>
+                <div class="no-matches">
+                    <p>😔 No new matches available right now</p>
+                    <p>Check back later or update your preferences</p>
+                </div>
             <% } else { %>
-                <% matches.forEach(match => { %>
-                    <div class="match-card">
-                        <div class="avatar"><%= match.gender === 'Male' ? '👨' : '👩' %></div>
-                        <h3><%= match.username %>, <%= match.age %></h3>
-                        <p><%= match.bio %></p>
-                        <button class="btn-like">Send Interest</button>
+                <% potentialMatches.forEach(match => { %>
+                    <div class="match-card" data-user-id="<%= match._id %>">
+                        <div class="match-avatar">
+                            <%= match.gender === 'Male' ? '👨' : '👩' %>
+                        </div>
+                        <div class="match-info">
+                            <h3><%= match.username %>, <%= match.age %></h3>
+                            <p class="match-location">📍 <%= match.location %></p>
+                            <p class="match-bio"><%= match.bio %></p>
+                            <% if (match.interests && match.interests.length > 0) { %>
+                                <div class="match-interests">
+                                    <% match.interests.slice(0, 3).forEach(interest => { %>
+                                        <span class="interest-tag"><%= interest %></span>
+                                    <% }) %>
+                                </div>
+                            <% } %>
+                        </div>
+                        <div class="match-actions">
+                            <button class="btn btn-like" onclick="likeUser('<%= match._id %>')">
+                                ❤️ Like
+                            </button>
+                            <button class="btn btn-pass" onclick="passUser('<%= match._id %>')">
+                                ❌ Pass
+                            </button>
+                        </div>
                     </div>
                 <% }) %>
             <% } %>
         </div>
-    </div>
-</body>
-</html>
+    </section>
+
+    <section class="quick-actions">
+        <h2>Quick Actions</h2>
+        <div class="actions-grid">
+            <a href="/matches" class="action-card">
+                <div class="action-icon">💕</div>
+                <h3>View Matches</h3>
+                <p>See who you matched with</p>
+            </a>
+            <a href="/profile" class="action-card">
+                <div class="action-icon">👤</div>
+                <h3>Edit Profile</h3>
+                <p>Update your information</p>
+            </a>
+            <a href="/messages" class="action-card">
+                <div class="action-icon">💬</div>
+                <h3>Messages</h3>
+                <p>Chat with your matches</p>
+            </a>
+        </div>
+    </section>
+</div>
+
+<script>
+async function likeUser(userId) {
+    try {
+        const response = await fetch(`/like/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '<%= csrfToken %>'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (data.isMatch) {
+                alert("🎉 It's a match! You can now message each other.");
+                window.location.href = '/matches';
+            } else {
+                alert('❤️ Like sent!');
+                event.target.closest('.match-card').remove();
+            }
+        } else {
+            alert(data.message || 'Failed to send like');
+        }
+    } catch (error) {
+        console.error('Like error:', error);
+        alert('Failed to send like');
+    }
+}
+
+function passUser(userId) {
+    event.target.closest('.match-card').remove();
+}
+</script>
+
+<%- include('partials/footer') %>
