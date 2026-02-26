@@ -19,7 +19,7 @@ exports.requireLogin = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    console.error('Auth error:', error.message);
     req.flash('error', 'Authentication error');
     res.redirect('/login');
   }
@@ -28,13 +28,6 @@ exports.requireLogin = async (req, res, next) => {
 exports.requireGuest = (req, res, next) => {
   if (req.session.userId) {
     return res.redirect('/dashboard');
-  }
-  next();
-};
-
-exports.checkVerification = (req, res, next) => {
-  if (!req.user.isVerified) {
-    req.flash('warning', 'Please verify your account for full access');
   }
   next();
 };
