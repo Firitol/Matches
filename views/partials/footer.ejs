@@ -1,0 +1,36 @@
+<!-- views/partials/footer.ejs -->
+    </main>
+
+    <footer style="background:#2c3e50;color:#fff;padding:2rem;text-align:center;margin-top:auto">
+        <div style="max-width:1200px;margin:0 auto">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:2rem;margin-bottom:2rem;text-align:left">
+                <div>
+                    <h3 style="margin-bottom:1rem">🇪🇹 EthioMatch</h3>
+                    <p style="opacity:0.9;line-height:1.6">Find serious relationships with Ethiopians worldwide.</p>
+                    <p style="color:#ff9800;font-weight:bold;margin-top:1rem">⚠️ 18+ Only</p>
+                </div>
+                <div>
+                    <h4 style="margin-bottom:1rem">Quick Links</h4>
+                    <ul style="list-style:none;padding:0">
+                        <li style="margin-bottom:0.5rem"><a href="/register" style="color:#fff;text-decoration:none">Join Now</a></li>
+                        <li style="margin-bottom:0.5rem"><a href="/login" style="color:#fff;text-decoration:none">Login</a></li>
+                        <li style="margin-bottom:0.5rem"><a href="/dashboard" style="color:#fff;text-decoration:none">Dashboard</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 style="margin-bottom:1rem">Support</h4>
+                    <ul style="list-style:none;padding:0">
+                        <li style="margin-bottom:0.5rem"><a href="#" style="color:#fff;text-decoration:none">Safety Tips</a></li>
+                        <li style="margin-bottom:0.5rem"><a href="#" style="color:#fff;text-decoration:none">Report User</a></li>
+                        <li style="margin-bottom:0.5rem"><a href="#" style="color:#fff;text-decoration:none">Contact Us</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:2rem">
+                <p style="opacity:0.8">&copy; <%= typeof currentYear !== 'undefined' ? currentYear : new Date().getFullYear() %> EthioMatch. All rights reserved.</p>
+                <p style="opacity:0.6;font-size:0.9rem;margin-top:0.5rem">For serious relationships only. 18+</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
