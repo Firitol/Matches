@@ -241,3 +241,20 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
+// Add this before the 404 handler
+app.get('/debug/files', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const viewsPath = path.join(__dirname, 'views');
+  const partialsPath = path.join(viewsPath, 'partials');
+  
+  res.json({
+    cwd: process.cwd(),
+    viewsExists: fs.existsSync(viewsPath),
+    partialsExists: fs.existsSync(partialsPath),
+    headerExists: fs.existsSync(path.join(partialsPath, 'header.ejs')),
+    footerExists: fs.existsSync(path.join(partialsPath, 'footer.ejs')),
+    files: fs.existsSync(partialsPath) ? fs.readdirSync(partialsPath) : []
+  });
+});
