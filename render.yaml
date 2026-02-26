@@ -1,17 +1,3 @@
-# render.yaml
-services:
-  - type: web
-    name: ethio-match
-    env: node
-    buildCommand: npm install
-    startCommand: node server.js
-    nodeVersion: "20.x"
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MONGODB_URI
-        sync: false
-      - key: SESSION_SECRET
-        sync: false
-      - key: CSRF_SECRET
-        sync: false
+git add render.yaml
+git commit -m "Add render.yaml"
+git push
