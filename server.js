@@ -1,5 +1,6 @@
-// server.js
+// server.js - RENDER PRODUCTION READY
 require('dotenv').config();
+
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
@@ -13,13 +14,16 @@ const flash = require('express-flash');
 
 const app = express();
 
-// 🔐 Security Headers
+// ============================================
+// 🛡️ SECURITY MIDDLEWARE
+// ============================================
+
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
 
-// 🚦 Rate Limiting
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -27,7 +31,10 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// 🔐 CSRF Protection (Safe Fallback)
+// ============================================
+// 🔐 CSRF PROTECTION (Safe Fallback)
+// ============================================
+
 const csrfEnabled = process.env.CSRF_SECRET && process.env.CSRF_SECRET.length >= 32;
 
 if (csrfEnabled) {
@@ -61,35 +68,72 @@ if (csrfEnabled) {
   });
 }
 
-// 🗄️ MongoDB Connection (Render-Compatible)
+// ============================================
+// 🗄️ MONGODB CONNECTION (Robust, Render-Compatible)
+// ============================================
+
+let mongooseInstance = null;
+
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
+    if (!process.env.MONGODB_URI) {
+      console.warn('⚠️ MONGODB_URI not set, database unavailable');
+      return null;
+    }
+    
+    // Close existing connection if any
+    if (mongooseInstance && mongooseInstance.connection.readyState !== 0) {
+      await mongooseInstance.disconnect();
+    }
+    
+    // Create new connection with TLS settings for Render
+    mongooseInstance = await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      retryWrites: true,
+      w: 'majority',
+      appName: 'EthioMatch'
     });
+    
     console.log('✅ MongoDB Connected');
+    return mongooseInstance;
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
     // Don't exit - allow app to start for health checks
+    return null;
   }
 };
+
+// Initial connection
 connectDB();
 
-// 🔄 Reconnect on disconnect
+// Reconnect on disconnect (with debounce)
+let reconnectTimeout = null;
 mongoose.connection.on('disconnected', () => {
-  console.log('⚠️ MongoDB disconnected, reconnecting...');
-  connectDB();
+  console.log('⚠️ MongoDB disconnected, attempting reconnect in 5s...');
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
+  reconnectTimeout = setTimeout(() => connectDB(), 5000);
 });
 
-// 📦 Session Configuration
+// Handle connection errors
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err.message);
+});
+
+// ============================================
+// 📦 SESSION CONFIGURATION
+// ============================================
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({ 
     mongoUrl: process.env.MONGODB_URI,
-    ttl: 24 * 60 * 60
+    ttl: 24 * 60 * 60,
+    autoRemove: 'native'
   }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
@@ -100,24 +144,39 @@ app.use(session({
   name: 'ethiomatch.sid'
 }));
 
-// 🎨 View Engine
+// ============================================
+// 🎨 VIEW ENGINE & STATIC FILES
+// ============================================
+
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-
-// 📁 Static Files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 📝 Body Parsing
+// ============================================
+// 📝 REQUEST PARSING & LOGGING
+// ============================================
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// 📊 Logging
 app.use(morgan('combined'));
 
-// 💬 Flash Messages
+// Request logging middleware (helps debug issues)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${req.method} ${req.url} - ${res.statusCode} in ${duration}ms`);
+  });
+  next();
+});
+
+// Flash messages
 app.use(flash());
 
-// 🌍 Global View Variables
+// ============================================
+// 🌍 GLOBAL VARIABLES FOR VIEWS
+// ============================================
+
 const User = require('./models/User');
 const { formatDate, getAvatarEmoji, truncateText, formatRelativeTime, isOnline } = require('./utils/helpers');
 const constants = require('./utils/constants');
@@ -150,14 +209,32 @@ app.use(async (req, res, next) => {
 // 🚦 ROUTES
 // ============================================
 
-// Health Check (Critical for Render)
-app.get('/health', (req, res) => {
+// Health Check (Works without MongoDB)
+app.get('/health', async (req, res) => {
+  let dbStatus = 'unknown';
+  
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await mongoose.connection.db.admin().ping();
+      dbStatus = 'connected';
+    } else {
+      dbStatus = 'disconnected';
+    }
+  } catch (e) {
+    dbStatus = 'error: ' + e.message;
+  }
+  
   res.json({
-    status: 'healthy',
+    status: dbStatus === 'connected' ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    nodeVersion: process.version,
+    database: dbStatus,
+    render: {
+      port: process.env.PORT,
+      hostname: process.env.HOSTNAME || 'unknown'
+    }
   });
 });
 
@@ -180,10 +257,15 @@ app.use('/', require('./routes/user'));
 app.use('/', require('./routes/match'));
 
 // ============================================
-// ❌ 404 Handler
+// ❌ 404 HANDLER
 // ============================================
 
 app.use((req, res) => {
+  // Check if headers already sent
+  if (res.headersSent) {
+    return res.end();
+  }
+  
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
@@ -192,21 +274,47 @@ app.use((req, res) => {
 });
 
 // ============================================
-// 🚨 Global Error Handler
+// 🚨 GLOBAL ERROR HANDLER (FIXED)
 // ============================================
 
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   
-  res.status(err.status || 500).render('error', {
-    title: 'Error',
-    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
-    error: process.env.NODE_ENV === 'production' ? {} : err
-  });
+  // Check if headers already sent - CRITICAL FIX
+  if (res.headersSent) {
+    console.error('Headers already sent, cannot render error page');
+    return next(err);
+  }
+  
+  // Log the error stack for debugging
+  console.error('Stack:', err.stack);
+  
+  // Send JSON response for API requests
+  if (req.headers.accept?.includes('application/json')) {
+    return res.status(err.status || 500).json({
+      error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+    });
+  }
+  
+  // Render error page for browser requests
+  res.status(err.status || 500);
+  
+  // Try to render error page, with fallback
+  try {
+    res.render('error', {
+      title: 'Error',
+      message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
+      error: process.env.NODE_ENV === 'production' ? {} : err
+    });
+  } catch (renderErr) {
+    console.error('Failed to render error page:', renderErr.message);
+    // Ultimate fallback - plain text response
+    res.type('text').send('500 - Internal Server Error');
+  }
 });
 
 // ============================================
-// 🚀 Start Server
+// 🚀 START SERVER
 // ============================================
 
 const PORT = process.env.PORT || 3000;
@@ -217,7 +325,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // ============================================
-// 🛑 Graceful Shutdown (Render Requirement)
+// 🛑 GRACEFUL SHUTDOWN (Render Requirement)
 // ============================================
 
 process.on('SIGTERM', () => {
@@ -243,10 +351,13 @@ process.on('SIGINT', () => {
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err.message);
+  // Don't exit immediately - let Express handle
 });
 
+// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
+  // Don't exit - let the app continue
 });
 
 module.exports = app;
