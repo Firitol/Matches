@@ -361,3 +361,23 @@ process.on('unhandledRejection', (reason) => {
 });
 
 module.exports = app;
+// TEMPORARY DEBUG - REMOVE AFTER TESTING
+app.get('/debug/db', async (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  
+  try {
+    await mongoose.connection.db.admin().ping();
+    res.json({ 
+      success: true, 
+      message: 'MongoDB ping successful',
+      uri: process.env.MONGODB_URI ? 'Set' : 'NOT SET'
+    });
+  } catch (e) {
+    res.status(500).json({ 
+      success: false, 
+      error: e.message,
+      readyState: mongoose.connection.readyState,
+      uri: process.env.MONGODB_URI ? 'Set (hidden)' : 'NOT SET'
+    });
+  }
+});
