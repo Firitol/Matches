@@ -1,6 +1,5 @@
-// server.js - RENDER COMPATIBLE VERSION
+// server.js
 require('dotenv').config();
-
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
@@ -14,30 +13,24 @@ const flash = require('express-flash');
 
 const app = express();
 
-// ============================================
-// 🛡️ SECURITY MIDDLEWARE
-// ============================================
-
+// 🔐 Security Headers
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
 
+// 🚦 Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: { success: false, message: 'Too many requests' }
 });
-
 app.use('/api/', limiter);
 
-// ============================================
-// 🔐 CSRF PROTECTION
-// ============================================
+// 🔐 CSRF Protection (Safe Fallback)
+const csrfEnabled = process.env.CSRF_SECRET && process.env.CSRF_SECRET.length >= 32;
 
-const enableCSRF = process.env.CSRF_SECRET && process.env.CSRF_SECRET.length > 32;
-
-if (enableCSRF) {
+if (csrfEnabled) {
   const { generateToken, doubleCsrfProtection } = doubleCsrf({
     getSecret: () => process.env.CSRF_SECRET,
     cookieName: 'ethiomatch_csrf',
@@ -59,34 +52,37 @@ if (enableCSRF) {
     }
     next();
   });
-
   app.use(doubleCsrfProtection);
 } else {
-  console.warn('⚠️ CSRF disabled: Set CSRF_SECRET env var (32+ chars)');
+  console.log('ℹ️ CSRF: Set CSRF_SECRET env var (32+ chars) for production');
   app.use((req, res, next) => {
     res.locals.csrfToken = 'dev-token';
     next();
   });
 }
 
-// ============================================
-// 🗄️ DATABASE CONNECTION (Persistent for Render)
-// ============================================
+// 🗄️ MongoDB Connection (Render-Compatible)
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+    });
+    console.log('✅ MongoDB Connected');
+  } catch (err) {
+    console.error('❌ MongoDB Connection Error:', err.message);
+    // Don't exit - allow app to start for health checks
+  }
+};
+connectDB();
 
-mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-})
-.then(() => console.log('✅ MongoDB Connected'))
-.catch(err => {
-  console.error('❌ MongoDB Connection Error:', err.message);
-  process.exit(1);
+// 🔄 Reconnect on disconnect
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️ MongoDB disconnected, reconnecting...');
+  connectDB();
 });
 
-// ============================================
-// 📦 SESSION CONFIGURATION (Server-side for Render)
-// ============================================
-
+// 📦 Session Configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
   resave: false,
@@ -104,33 +100,37 @@ app.use(session({
   name: 'ethiomatch.sid'
 }));
 
-// ============================================
-// 🎨 VIEW ENGINE & STATIC FILES
-// ============================================
-
+// 🎨 View Engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// 📁 Static Files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ============================================
-// 📝 REQUEST PARSING & LOGGING
-// ============================================
-
+// 📝 Body Parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 📊 Logging
 app.use(morgan('combined'));
+
+// 💬 Flash Messages
 app.use(flash());
 
-// ============================================
-// 🌍 GLOBAL VARIABLES FOR VIEWS
-// ============================================
-
+// 🌍 Global View Variables
 const User = require('./models/User');
 const { formatDate, getAvatarEmoji, truncateText, formatRelativeTime, isOnline } = require('./utils/helpers');
 const constants = require('./utils/constants');
 
 app.use(async (req, res, next) => {
-  res.locals.user = req.session.userId ? await User.findById(req.session.userId).catch(() => null) : null;
+  res.locals.user = null;
+  if (req.session.userId) {
+    try {
+      res.locals.user = await User.findById(req.session.userId);
+    } catch (e) {
+      // User not found, session will be cleared on next request
+    }
+  }
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.warning = req.flash('warning');
@@ -150,7 +150,7 @@ app.use(async (req, res, next) => {
 // 🚦 ROUTES
 // ============================================
 
-// Health check
+// Health Check (Critical for Render)
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -161,7 +161,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Home
+// Home Page
 app.get('/', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -170,17 +170,17 @@ app.get('/', (req, res) => {
   }
 });
 
-// Auth routes
+// Auth Routes
 app.use('/', require('./routes/auth'));
 
-// User routes
+// User Routes (Protected)
 app.use('/', require('./routes/user'));
 
-// Match routes
+// Match Routes (Protected)
 app.use('/', require('./routes/match'));
 
 // ============================================
-// ❌ 404 HANDLER
+// ❌ 404 Handler
 // ============================================
 
 app.use((req, res) => {
@@ -192,7 +192,7 @@ app.use((req, res) => {
 });
 
 // ============================================
-// 🚨 ERROR HANDLER
+// 🚨 Global Error Handler
 // ============================================
 
 app.use((err, req, res, next) => {
@@ -206,22 +206,22 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 🚀 START SERVER (Render requires this)
+// 🚀 Start Server
 // ============================================
 
 const PORT = process.env.PORT || 3000;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 EthioMatch running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 // ============================================
-// 🛑 GRACEFUL SHUTDOWN (Important for Render)
+// 🛑 Graceful Shutdown (Render Requirement)
 // ============================================
 
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down');
+  console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
     mongoose.connection.close(() => {
       console.log('MongoDB connection closed');
@@ -231,7 +231,7 @@ process.on('SIGTERM', () => {
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down');
+  console.log('SIGINT received, shutting down gracefully');
   server.close(() => {
     mongoose.connection.close(() => {
       console.log('MongoDB connection closed');
@@ -240,21 +240,13 @@ process.on('SIGINT', () => {
   });
 });
 
-module.exports = app;
-// Add this before the 404 handler
-app.get('/debug/files', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  
-  const viewsPath = path.join(__dirname, 'views');
-  const partialsPath = path.join(viewsPath, 'partials');
-  
-  res.json({
-    cwd: process.cwd(),
-    viewsExists: fs.existsSync(viewsPath),
-    partialsExists: fs.existsSync(partialsPath),
-    headerExists: fs.existsSync(path.join(partialsPath, 'header.ejs')),
-    footerExists: fs.existsSync(path.join(partialsPath, 'footer.ejs')),
-    files: fs.existsSync(partialsPath) ? fs.readdirSync(partialsPath) : []
-  });
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err.message);
 });
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
+module.exports = app;
