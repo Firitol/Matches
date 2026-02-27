@@ -1,114 +1,104 @@
 // models/User.js
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../lib/database');
 const bcrypt = require('bcryptjs');
 
-const userSchema = new mongoose.Schema({
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   username: {
-    type: String,
-    required: [true, 'Username is required'],
+    type: DataTypes.STRING(30),
+    allowNull: false,
     unique: true,
-    trim: true,
-    minlength: [3, 'Username must be at least 3 characters'],
-    maxlength: [30, 'Username must be at most 30 characters']
+    validate: {
+      len: [3, 30],
+      isAlphanumeric: true
+    }
   },
   email: {
-    type: String,
-    required: [true, 'Email is required'],
+    type: DataTypes.STRING,
+    allowNull: false,
     unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email']
+    validate: {
+      isEmail: true
+    }
   },
   password: {
-    type: String,
-    required: [true, 'Password is required'],
-    minlength: [8, 'Password must be at least 8 characters'],
-    select: false
+    type: DataTypes.STRING,
+    allowNull: false,
+    validate: {
+      len: [8, 100]
+    }
   },
   age: {
-    type: Number,
-    required: [true, 'Age is required'],
-    min: [18, 'You must be 18 or older'],
-    max: [100, 'Age must be 100 or less'],
+    type: DataTypes.INTEGER,  // ✅ Always a number!
+    allowNull: false,
     validate: {
-      validator: function(v) {
-        return typeof v === 'number' && !isNaN(v) && v >= 18 && v <= 100;
-      },
-      message: 'Age must be a number between 18 and 100 (you entered: {VALUE})'
+      isInt: true,
+      min: 18,  // ✅ Enforced by database
+      max: 100
     }
   },
   gender: {
-    type: String,
-    required: [true, 'Gender is required'],
-    enum: ['Male', 'Female', 'Other']
+    type: DataTypes.ENUM('Male', 'Female', 'Other'),
+    allowNull: false
   },
   lookingFor: {
-    type: String,
-    required: [true, 'Looking for is required'],
-    enum: ['Male', 'Female', 'Both']
+    type: DataTypes.ENUM('Male', 'Female', 'Both'),
+    allowNull: false
   },
   location: {
-    type: String,
-    default: 'Ethiopia',
-    maxlength: 100
+    type: DataTypes.STRING(100),
+    defaultValue: 'Ethiopia'
   },
   bio: {
-    type: String,
-    maxlength: 500,
-    default: 'Looking for a serious relationship.'
+    type: DataTypes.TEXT,
+    defaultValue: 'Looking for a serious relationship.'
   },
-  interests: [String],
+  interests: {
+    type: DataTypes.ARRAY(DataTypes.STRING),
+    defaultValue: []
+  },
   profileImage: {
-    type: String,
-    default: '/images/default-avatar.png'
+    type: DataTypes.STRING,
+    defaultValue: '/images/default-avatar.png'
   },
   isActive: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   },
   isVerified: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   lastActive: {
-    type: Date,
-    default: Date.now
-  },
-  reportedBy: [{
-    userId: mongoose.Schema.Types.ObjectId,
-    reason: String,
-    date: { type: Date, default: Date.now }
-  }]
-}, { 
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
+  }
+}, {
+  tableName: 'users',
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
-
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    console.log('✅ Password hashed for user:', this.username);
-    next();
-  } catch (error) {
-    console.error('❌ Password hash error:', error.message);
-    next(error);
+  hooks: {
+    beforeSave: async (user) => {
+      if (user.changed('password')) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+      }
+    }
   }
 });
 
-// Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+// Instance methods
+User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Update last active
-userSchema.methods.updateLastActive = async function() {
-  this.lastActive = Date.now();
-  return this.save().catch(() => {});
+User.prototype.updateLastActive = async function() {
+  this.lastActive = new Date();
+  return this.save();
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;
