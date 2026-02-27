@@ -1,18 +1,93 @@
-// server.js - RENDER PRODUCTION READY (with temporary age bypass)
+// server.js - RENDER PRODUCTION READY (PostgreSQL + Age Bypass)
 require('dotenv').config();
 
 const express = require('express');
-const mongoose = require('mongoose');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
+const PostgreSQLStore = require('connect-pg-simple')(session);
 const morgan = require('morgan');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { doubleCsrf } = require('csrf-csrf');
 const path = require('path');
 const flash = require('express-flash');
+const { Sequelize, Op } = require('sequelize');
 
 const app = express();
+
+// ============================================
+// 🗄️ POSTGRESQL DATABASE CONNECTION
+// ============================================
+
+let sequelize;
+
+const connectDB = async () => {
+  try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('⚠️ DATABASE_URL not set, using fallback');
+      process.env.DATABASE_URL = 'postgres://localhost:5432/ethiomatch';
+    }
+    
+    sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      protocol: 'postgres',
+      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      }
+    });
+    
+    await sequelize.authenticate();
+    console.log('✅ PostgreSQL Connected');
+    
+    // Sync models (create tables if they don't exist)
+    await sequelize.sync({ alter: true });
+    console.log('✅ Database tables synced');
+    
+    return sequelize;
+  } catch (error) {
+    console.error('❌ PostgreSQL Connection Error:', error.message);
+    // Don't exit - allow health checks to work
+    return null;
+  }
+};
+
+connectDB();
+
+// ============================================
+// 📦 SESSION CONFIGURATION (PostgreSQL)
+// ============================================
+
+app.use(session({
+  store: new PostgreSQLStore({
+    conObject: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    },
+    tableName: 'session',
+    createTableIfMissing: true,
+    errorLog: console.error.bind(console)
+  }),
+  secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
+  },
+  name: 'ethiomatch.sid'
+}));
 
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
@@ -31,110 +106,14 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ============================================
-// 🔐 CSRF PROTECTION (Temporary Bypass for Debug)
+// 🔐 CSRF PROTECTION (Temporary Bypass)
 // ============================================
 
 // TEMPORARY: Disable CSRF for debugging registration issues
-// Re-enable after fixing age validation!
 app.use((req, res, next) => {
   res.locals.csrfToken = 'bypass-token';
   next();
 });
-
-/* 
-// Normal CSRF (re-enable later):
-const csrfEnabled = process.env.CSRF_SECRET && process.env.CSRF_SECRET.length >= 32;
-if (csrfEnabled) {
-  const { generateToken, doubleCsrfProtection } = doubleCsrf({
-    getSecret: () => process.env.CSRF_SECRET,
-    cookieName: 'ethiomatch_csrf',
-    cookieOptions: {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/'
-    },
-    size: 32,
-    ignoredMethods: ['GET', 'HEAD', 'OPTIONS']
-  });
-  app.use((req, res, next) => {
-    try { res.locals.csrfToken = generateToken(req, res); } 
-    catch (e) { res.locals.csrfToken = ''; }
-    next();
-  });
-  app.use(doubleCsrfProtection);
-}
-*/
-
-// ============================================
-// 🗄️ MONGODB CONNECTION
-// ============================================
-
-let mongooseInstance = null;
-
-const connectDB = async () => {
-  try {
-    if (!process.env.MONGODB_URI) {
-      console.warn('⚠️ MONGODB_URI not set, database unavailable');
-      return null;
-    }
-    
-    if (mongooseInstance && mongooseInstance.connection.readyState !== 0) {
-      await mongooseInstance.disconnect();
-    }
-    
-    mongooseInstance = await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      tls: true,
-      tlsAllowInvalidCertificates: false,
-      retryWrites: true,
-      w: 'majority',
-      appName: 'EthioMatch'
-    });
-    
-    console.log('✅ MongoDB Connected');
-    return mongooseInstance;
-  } catch (err) {
-    console.error('❌ MongoDB Connection Error:', err.message);
-    return null;
-  }
-};
-
-connectDB();
-
-let reconnectTimeout = null;
-mongoose.connection.on('disconnected', () => {
-  console.log('⚠️ MongoDB disconnected, attempting reconnect in 5s...');
-  if (reconnectTimeout) clearTimeout(reconnectTimeout);
-  reconnectTimeout = setTimeout(() => connectDB(), 5000);
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('MongoDB connection error:', err.message);
-});
-
-// ============================================
-// 📦 SESSION CONFIGURATION
-// ============================================
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({ 
-    mongoUrl: process.env.MONGODB_URI,
-    ttl: 24 * 60 * 60,
-    autoRemove: 'native'
-  }),
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax'
-  },
-  name: 'ethiomatch.sid'
-}));
 
 // ============================================
 // 🎨 VIEW ENGINE & STATIC FILES
@@ -167,30 +146,19 @@ app.use(flash());
 // 🌍 GLOBAL VARIABLES FOR VIEWS
 // ============================================
 
-const User = require('./models/User');
-const { formatDate, getAvatarEmoji, truncateText, formatRelativeTime, isOnline } = require('./utils/helpers');
-const constants = require('./utils/constants');
+const constants = {
+  APP_NAME: 'EthioMatch',
+  APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
+};
 
 app.use(async (req, res, next) => {
-  res.locals.user = null;
-  if (req.session.userId) {
-    try {
-      res.locals.user = await User.findById(req.session.userId);
-    } catch (e) {
-      // User not found
-    }
-  }
+  res.locals.user = req.session.user || null;
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.warning = req.flash('warning');
   res.locals.info = req.flash('info');
   res.locals.appName = constants.APP_NAME;
   res.locals.currentYear = new Date().getFullYear();
-  res.locals.formatDate = formatDate;
-  res.locals.formatRelativeTime = formatRelativeTime;
-  res.locals.getAvatarEmoji = getAvatarEmoji;
-  res.locals.truncateText = truncateText;
-  res.locals.isOnline = isOnline;
   res.locals.constants = constants;
   next();
 });
@@ -203,12 +171,8 @@ app.use(async (req, res, next) => {
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
   try {
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.connection.db.admin().ping();
-      dbStatus = 'connected';
-    } else {
-      dbStatus = 'disconnected';
-    }
+    await sequelize.query('SELECT 1');
+    dbStatus = 'connected';
   } catch (e) {
     dbStatus = 'error: ' + e.message;
   }
@@ -245,9 +209,15 @@ app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const User = require('./models/User');
-    const user = await User.findOne({ 
-      $or: [{ username }, { email: username }] 
-    }).select('+password');
+    
+    const user = await User.findOne({
+      where: {
+        [Op.or]: [
+          { username: username },
+          { email: username }
+        ]
+      }
+    });
     
     if (!user || !(await user.comparePassword(password))) {
       req.flash('error', 'Invalid credentials');
@@ -259,8 +229,9 @@ app.post('/login', async (req, res) => {
       return res.redirect('/login');
     }
     
-    req.session.userId = user._id.toString();
+    req.session.userId = user.id;
     req.session.username = user.username;
+    req.session.user = user;
     await user.updateLastActive();
     
     res.redirect('/dashboard');
@@ -294,8 +265,13 @@ app.post('/register', async (req, res) => {
     
     const User = require('./models/User');
     
-    const existing = await User.findOne({ 
-      $or: [{ username }, { email }] 
+    const existing = await User.findOne({
+      where: {
+        [Op.or]: [
+          { username: username },
+          { email: email }
+        ]
+      }
     });
     
     if (existing) {
@@ -303,24 +279,33 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    const user = new User({
+    const user = await User.create({
       username: username.trim(),
       email: email.toLowerCase(),
-      password,
+      password: password,
       age: ageNumber,
-      gender,
-      lookingFor,
+      gender: gender,
+      lookingFor: lookingFor,
       location: location || 'Ethiopia'
     });
     
-    await user.save();
+    console.log('✅ User created:', user.username, 'Age:', user.age);
     
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
     
   } catch (error) {
     console.error('Register error:', error.message);
-    req.flash('error', 'Registration failed: ' + error.message);
+    
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(e => e.message);
+      req.flash('error', messages);
+    } else if (error.name === 'SequelizeUniqueConstraintError') {
+      req.flash('error', 'Username or email already exists');
+    } else {
+      req.flash('error', 'Registration failed: ' + error.message);
+    }
+    
     res.redirect('/register');
   }
 });
@@ -342,27 +327,29 @@ app.get('/dashboard', async (req, res) => {
     const User = require('./models/User');
     const Match = require('./models/Match');
     
-    const user = await User.findById(req.session.userId);
+    const user = await User.findByPk(req.session.userId);
     if (!user) {
       req.session.destroy();
       return res.redirect('/login');
     }
     
-    const matched = await Match.find({
-      $or: [{ user1: user._id }, { user2: user._id }]
-    }).distinct('user1').concat(
-      await Match.find({ $or: [{ user1: user._id }, { user2: user._id }] }).distinct('user2')
-    );
+    const potentialMatches = await User.findAll({
+      where: {
+        id: { [Op.ne]: user.id },
+        isActive: true,
+        gender: user.lookingFor
+      },
+      limit: 10
+    });
     
-    const potentialMatches = await User.find({
-      _id: { $nin: [...matched.map(id => id.toString()), user._id.toString()] },
-      isActive: true,
-      gender: user.lookingFor
-    }).limit(10);
-    
-    const matchCount = await Match.countDocuments({
-      $or: [{ user1: user._id }, { user2: user._id }],
-      status: 'accepted'
+    const matchCount = await Match.count({
+      where: {
+        [Op.or]: [
+          { user1Id: user.id },
+          { user2Id: user.id }
+        ],
+        status: 'accepted'
+      }
     });
     
     res.render('dashboard', { title: 'Dashboard', user, potentialMatches, matchCount });
@@ -381,7 +368,7 @@ app.get('/profile', async (req, res) => {
   
   try {
     const User = require('./models/User');
-    const user = await User.findById(req.session.userId);
+    const user = await User.findByPk(req.session.userId);
     res.render('profile', { title: 'My Profile', user });
   } catch (error) {
     console.error('Profile error:', error.message);
@@ -398,7 +385,7 @@ app.post('/profile', async (req, res) => {
   try {
     const { bio, location, interests } = req.body;
     const User = require('./models/User');
-    const user = await User.findById(req.session.userId);
+    const user = await User.findByPk(req.session.userId);
     
     if (bio !== undefined) user.bio = bio.substring(0, 500);
     if (location !== undefined) user.location = location.substring(0, 100);
@@ -426,14 +413,22 @@ app.get('/matches', async (req, res) => {
     const Match = require('./models/Match');
     const User = require('./models/User');
     
-    const matches = await Match.find({
-      $or: [{ user1: req.session.userId }, { user2: req.session.userId }],
-      status: 'accepted'
-    }).populate('user1', 'username age profileImage')
-      .populate('user2', 'username age profileImage');
+    const matches = await Match.findAll({
+      where: {
+        [Op.or]: [
+          { user1Id: req.session.userId },
+          { user2Id: req.session.userId }
+        ],
+        status: 'accepted'
+      },
+      include: [
+        { model: User, as: 'user1', attributes: ['id', 'username', 'age', 'profileImage'] },
+        { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage'] }
+      ]
+    });
     
     const matchList = matches.map(m => {
-      return m.user1._id.toString() === req.session.userId ? m.user2 : m.user1;
+      return m.user1Id === req.session.userId ? m.user2 : m.user1;
     });
     
     res.render('matches', { title: 'My Matches', matches: matchList });
@@ -454,23 +449,25 @@ app.post('/like/:userId', async (req, res) => {
     const Match = require('./models/Match');
     
     let match = await Match.findOne({
-      $or: [
-        { user1: req.session.userId, user2: userId },
-        { user1: userId, user2: req.session.userId }
-      ]
+      where: {
+        [Op.or]: [
+          { user1Id: req.session.userId, user2Id: userId },
+          { user1Id: userId, user2Id: req.session.userId }
+        ]
+      }
     });
     
     if (!match) {
-      match = new Match({
-        user1: req.session.userId,
-        user2: userId,
-        likedBy: [{ userId: req.session.userId }]
+      match = await Match.create({
+        user1Id: req.session.userId,
+        user2Id: userId,
+        likedBy: [req.session.userId],
+        status: 'pending'
       });
-      await match.save();
     } else {
-      const alreadyLiked = match.likedBy?.some(l => l.userId?.toString() === req.session.userId);
+      const alreadyLiked = match.likedBy?.includes(req.session.userId);
       if (!alreadyLiked) {
-        match.likedBy.push({ userId: req.session.userId });
+        match.likedBy.push(req.session.userId);
         await match.save();
       }
     }
@@ -492,22 +489,28 @@ app.get('/messages/:matchId', async (req, res) => {
   try {
     const { matchId } = req.params;
     const Match = require('./models/Match');
-    const Message = require('./models/Message');
     const User = require('./models/User');
     
     const match = await Match.findOne({
-      _id: matchId,
-      $or: [{ user1: req.session.userId }, { user2: req.session.userId }],
-      status: 'accepted'
+      where: {
+        id: matchId,
+        [Op.or]: [
+          { user1Id: req.session.userId },
+          { user2Id: req.session.userId }
+        ],
+        status: 'accepted'
+      },
+      include: [
+        { model: User, as: 'user1', attributes: ['id', 'username', 'profileImage'] },
+        { model: User, as: 'user2', attributes: ['id', 'username', 'profileImage'] }
+      ]
     });
     
     if (!match) return res.redirect('/matches');
     
-    const otherId = match.user1.toString() === req.session.userId ? match.user2 : match.user1;
-    const otherUser = await User.findById(otherId);
-    const messages = await Message.find({ matchId }).populate('sender', 'username').sort({ createdAt: 1 });
+    const otherUser = match.user1Id === req.session.userId ? match.user2 : match.user1;
     
-    res.render('messages', { title: 'Messages', match, otherUser, messages });
+    res.render('messages', { title: 'Messages', match, otherUser, messages: [] });
   } catch (error) {
     console.error('Messages error:', error.message);
     res.redirect('/matches');
@@ -572,8 +575,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    mongoose.connection.close(() => {
-      console.log('MongoDB connection closed');
+    sequelize.close(() => {
+      console.log('PostgreSQL connection closed');
       process.exit(0);
     });
   });
@@ -582,8 +585,8 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
   server.close(() => {
-    mongoose.connection.close(() => {
-      console.log('MongoDB connection closed');
+    sequelize.close(() => {
+      console.log('PostgreSQL connection closed');
       process.exit(0);
     });
   });
