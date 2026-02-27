@@ -286,8 +286,21 @@ app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location } = req.body;
     
-    // ✅ FIX: Convert age to number
-    const ageNumber = parseInt(age, 10);
+    // 🔍 DEBUG: Log what we're receiving
+    console.log('=== REGISTRATION DEBUG ===');
+    console.log('Raw age value:', age);
+    console.log('Age type:', typeof age);
+    console.log('Age length:', age ? age.length : 'N/A');
+    
+    // ✅ FIX: Convert age to number multiple ways
+    const ageNumber = parseInt(String(age).trim(), 10);
+    const ageNumber2 = Number(age);
+    
+    console.log('Parsed age (parseInt):', ageNumber);
+    console.log('Parsed age (Number):', ageNumber2);
+    console.log('Is NaN:', isNaN(ageNumber));
+    console.log('Is valid number:', !isNaN(ageNumber) && ageNumber >= 18 && ageNumber <= 100);
+    console.log('========================');
     
     // Validate username
     if (!username || username.trim().length < 3) {
@@ -307,9 +320,14 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    // ✅ FIX: Proper age validation (number comparison)
-    if (!age || isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
-      req.flash('error', 'You must be 18-100 years old');
+    // ✅ FIX: Multiple validation checks for age
+    if (!age) {
+      req.flash('error', 'Age is required');
+      return res.redirect('/register');
+    }
+    
+    if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
+      req.flash('error', `You must be 18-100 years old (received: ${age})`);
       return res.redirect('/register');
     }
     
@@ -342,7 +360,7 @@ app.post('/register', async (req, res) => {
       username: username.trim(),
       email: email.toLowerCase(),
       password,
-      age: ageNumber,  // ✅ Store as number
+      age: ageNumber,
       gender,
       lookingFor,
       location: location || 'Ethiopia'
@@ -350,16 +368,18 @@ app.post('/register', async (req, res) => {
     
     await user.save();
     
+    console.log('✅ User created successfully:', user.username, 'Age:', user.age);
+    
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
     
   } catch (error) {
     console.error('Register error:', error.message);
-    req.flash('error', 'Registration failed. Please try again.');
+    console.error('Error details:', error);
+    req.flash('error', 'Registration failed: ' + error.message);
     res.redirect('/register');
   }
 });
-
 // Logout
 app.get('/logout', (req, res) => {
   req.session.destroy();
