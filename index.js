@@ -191,7 +191,7 @@
     </div>
 </section>
 
-<section style="padding: 5rem 1.5rem; background: linear-gradient(135deg, #9B1C31 0%, #7A1626 100%); color: white; text-align: center;">
+<section style="padding: 5rem 1.5rem; background: linear-gradient(135deg, #E0D7E0 0%, #7A1626 100%); color: white; text-align: center;">
     <div style="max-width: 700px; margin: 0 auto;">
         <h2 style="font-size: clamp(1.75rem, 3vw, 2.5rem); font-weight: 700; margin-bottom: 1.25rem; line-height: 1.2;">Ready to Find Your Person?</h2>
         <p style="font-size: 1.15rem; color: rgba(255, 255, 255, 0.95); margin-bottom: 2.5rem; line-height: 1.7;">
@@ -204,7 +204,7 @@
             gap: 0.75rem;
             padding: 1.125rem 2.5rem;
             background: white;
-            color: #9B1C31;
+            color: #E0D7E0;
             text-decoration: none;
             border-radius: 0.75rem;
             font-weight: 700;
