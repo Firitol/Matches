@@ -1,28 +1,53 @@
 // models/Match.js
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../lib/database');
+const User = require('./User');
 
-const matchSchema = new mongoose.Schema({
-  user1: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  user2: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  status: {
-    type: String,
-    enum: ['pending', 'accepted', 'rejected', 'blocked'],
-    default: 'pending'
+const Match = sequelize.define('Match', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  likedBy: [{
-    userId: mongoose.Schema.Types.ObjectId,
-    date: { type: Date, default: Date.now }
-  }],
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  user1Id: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: User,
+      key: 'id'
+    }
+  },
+  user2Id: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: User,
+      key: 'id'
+    }
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'accepted', 'rejected', 'blocked'),
+    defaultValue: 'pending'
+  },
+  likedBy: {
+    type: DataTypes.ARRAY(DataTypes.UUID),
+    defaultValue: []
+  }
+}, {
+  tableName: 'matches',
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['user1Id', 'user2Id']
+    }
+  ]
 });
 
-// Prevent duplicate matches
-matchSchema.index({ user1: 1, user2: 1 }, { unique: true });
+// Associations
+User.hasMany(Match, { foreignKey: 'user1Id', as: 'matchesAsUser1' });
+User.hasMany(Match, { foreignKey: 'user2Id', as: 'matchesAsUser2' });
+Match.belongsTo(User, { foreignKey: 'user1Id', as: 'user1' });
+Match.belongsTo(User, { foreignKey: 'user2Id', as: 'user2' });
 
-matchSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-module.exports = mongoose.model('Match', matchSchema);
+module.exports = Match;
