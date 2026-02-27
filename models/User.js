@@ -29,7 +29,13 @@ age: {
   type: Number,
   required: [true, 'Age is required'],
   min: [18, 'You must be 18 or older'],
-  max: [100, 'Please enter a valid age']
+  max: [100, 'Please enter a valid age'],
+  validate: {
+    validator: function(v) {
+      return !isNaN(v) && v >= 18 && v <= 100;
+    },
+    message: 'Age must be between 18 and 100'
+  }
 },
   gender: {
     type: String,
