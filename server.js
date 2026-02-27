@@ -23,7 +23,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -32,7 +31,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ============================================
-// 🔐 CSRF PROTECTION (Safe Fallback)
+// 🔐 CSRF PROTECTION
 // ============================================
 
 const csrfEnabled = process.env.CSRF_SECRET && process.env.CSRF_SECRET.length >= 32;
@@ -69,7 +68,7 @@ if (csrfEnabled) {
 }
 
 // ============================================
-// 🗄️ MONGODB CONNECTION (Robust, Render-Compatible)
+// 🗄️ MONGODB CONNECTION
 // ============================================
 
 let mongooseInstance = null;
@@ -81,12 +80,10 @@ const connectDB = async () => {
       return null;
     }
     
-    // Close existing connection if any
     if (mongooseInstance && mongooseInstance.connection.readyState !== 0) {
       await mongooseInstance.disconnect();
     }
     
-    // Create new connection with TLS settings for Render
     mongooseInstance = await mongoose.connect(process.env.MONGODB_URI, {
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
@@ -101,15 +98,12 @@ const connectDB = async () => {
     return mongooseInstance;
   } catch (err) {
     console.error('❌ MongoDB Connection Error:', err.message);
-    // Don't exit - allow app to start for health checks
     return null;
   }
 };
 
-// Initial connection
 connectDB();
 
-// Reconnect on disconnect (with debounce)
 let reconnectTimeout = null;
 mongoose.connection.on('disconnected', () => {
   console.log('⚠️ MongoDB disconnected, attempting reconnect in 5s...');
@@ -117,7 +111,6 @@ mongoose.connection.on('disconnected', () => {
   reconnectTimeout = setTimeout(() => connectDB(), 5000);
 });
 
-// Handle connection errors
 mongoose.connection.on('error', (err) => {
   console.error('MongoDB connection error:', err.message);
 });
@@ -160,7 +153,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
 
-// Request logging middleware (helps debug issues)
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -170,7 +162,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Flash messages
 app.use(flash());
 
 // ============================================
@@ -187,7 +178,7 @@ app.use(async (req, res, next) => {
     try {
       res.locals.user = await User.findById(req.session.userId);
     } catch (e) {
-      // User not found, session will be cleared on next request
+      // User not found
     }
   }
   res.locals.success = req.flash('success');
@@ -209,10 +200,9 @@ app.use(async (req, res, next) => {
 // 🚦 ROUTES
 // ============================================
 
-// Health Check (Works without MongoDB)
+// Health Check
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
-  
   try {
     if (mongoose.connection.readyState === 1) {
       await mongoose.connection.db.admin().ping();
@@ -229,12 +219,7 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-    nodeVersion: process.version,
-    database: dbStatus,
-    render: {
-      port: process.env.PORT,
-      hostname: process.env.HOSTNAME || 'unknown'
-    }
+    database: dbStatus
   });
 });
 
@@ -247,25 +232,326 @@ app.get('/', (req, res) => {
   }
 });
 
-// Auth Routes
-app.use('/', require('./routes/auth'));
+// Login GET
+app.get('/login', (req, res) => {
+  if (req.session.userId) {
+    res.redirect('/dashboard');
+  } else {
+    res.render('login', { title: 'Login' });
+  }
+});
 
-// User Routes (Protected)
-app.use('/', require('./routes/user'));
+// Login POST
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const User = require('./models/User');
+    const user = await User.findOne({ 
+      $or: [{ username }, { email: username }] 
+    }).select('+password');
+    
+    if (!user || !(await user.comparePassword(password))) {
+      req.flash('error', 'Invalid credentials');
+      return res.redirect('/login');
+    }
+    
+    if (!user.isActive) {
+      req.flash('error', 'Account deactivated');
+      return res.redirect('/login');
+    }
+    
+    req.session.userId = user._id.toString();
+    req.session.username = user.username;
+    await user.updateLastActive();
+    
+    res.redirect('/dashboard');
+  } catch (error) {
+    console.error('Login error:', error.message);
+    req.flash('error', 'Login failed');
+    res.redirect('/login');
+  }
+});
 
-// Match Routes (Protected)
-app.use('/', require('./routes/match'));
+// Register GET
+app.get('/register', (req, res) => {
+  if (req.session.userId) {
+    res.redirect('/dashboard');
+  } else {
+    res.render('register', { title: 'Join EthioMatch' });
+  }
+});
 
-// ============================================
-// ❌ 404 HANDLER
-// ============================================
+// Register POST - ✅ AGE VALIDATION FIXED
+app.post('/register', async (req, res) => {
+  try {
+    const { username, email, password, age, gender, lookingFor, location } = req.body;
+    
+    // ✅ FIX: Convert age to number
+    const ageNumber = parseInt(age, 10);
+    
+    // Validate username
+    if (!username || username.trim().length < 3) {
+      req.flash('error', 'Username must be at least 3 characters');
+      return res.redirect('/register');
+    }
+    
+    // Validate email
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      req.flash('error', 'Please enter a valid email');
+      return res.redirect('/register');
+    }
+    
+    // Validate password
+    if (!password || password.length < 8) {
+      req.flash('error', 'Password must be at least 8 characters');
+      return res.redirect('/register');
+    }
+    
+    // ✅ FIX: Proper age validation (number comparison)
+    if (!age || isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
+      req.flash('error', 'You must be 18-100 years old');
+      return res.redirect('/register');
+    }
+    
+    // Validate gender
+    if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
+      req.flash('error', 'Please select a valid gender');
+      return res.redirect('/register');
+    }
+    
+    // Validate lookingFor
+    if (!lookingFor || !['Male', 'Female', 'Both'].includes(lookingFor)) {
+      req.flash('error', 'Please select what you are looking for');
+      return res.redirect('/register');
+    }
+    
+    const User = require('./models/User');
+    
+    // Check for existing user
+    const existing = await User.findOne({ 
+      $or: [{ username }, { email: email.toLowerCase() }] 
+    });
+    
+    if (existing) {
+      req.flash('error', 'Username or email already exists');
+      return res.redirect('/register');
+    }
+    
+    // Create new user
+    const user = new User({
+      username: username.trim(),
+      email: email.toLowerCase(),
+      password,
+      age: ageNumber,  // ✅ Store as number
+      gender,
+      lookingFor,
+      location: location || 'Ethiopia'
+    });
+    
+    await user.save();
+    
+    req.flash('success', 'Account created! Please login.');
+    res.redirect('/login');
+    
+  } catch (error) {
+    console.error('Register error:', error.message);
+    req.flash('error', 'Registration failed. Please try again.');
+    res.redirect('/register');
+  }
+});
 
-app.use((req, res) => {
-  // Check if headers already sent
-  if (res.headersSent) {
-    return res.end();
+// Logout
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+// Dashboard
+app.get('/dashboard', async (req, res) => {
+  if (!req.session.userId) {
+    req.flash('error', 'Please login');
+    return res.redirect('/login');
   }
   
+  try {
+    const User = require('./models/User');
+    const Match = require('./models/Match');
+    
+    const user = await User.findById(req.session.userId);
+    if (!user) {
+      req.session.destroy();
+      return res.redirect('/login');
+    }
+    
+    const matched = await Match.find({
+      $or: [{ user1: user._id }, { user2: user._id }]
+    }).distinct('user1').concat(
+      await Match.find({ $or: [{ user1: user._id }, { user2: user._id }] }).distinct('user2')
+    );
+    
+    const potentialMatches = await User.find({
+      _id: { $nin: [...matched.map(id => id.toString()), user._id.toString()] },
+      isActive: true,
+      gender: user.lookingFor
+    }).limit(10);
+    
+    const matchCount = await Match.countDocuments({
+      $or: [{ user1: user._id }, { user2: user._id }],
+      status: 'accepted'
+    });
+    
+    res.render('dashboard', { title: 'Dashboard', user, potentialMatches, matchCount });
+  } catch (error) {
+    console.error('Dashboard error:', error.message);
+    req.flash('error', 'Failed to load dashboard');
+    res.redirect('/');
+  }
+});
+
+// Profile GET
+app.get('/profile', async (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect('/login');
+  }
+  
+  try {
+    const User = require('./models/User');
+    const user = await User.findById(req.session.userId);
+    res.render('profile', { title: 'My Profile', user });
+  } catch (error) {
+    console.error('Profile error:', error.message);
+    res.redirect('/dashboard');
+  }
+});
+
+// Profile POST
+app.post('/profile', async (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect('/login');
+  }
+  
+  try {
+    const { bio, location, interests } = req.body;
+    const User = require('./models/User');
+    const user = await User.findById(req.session.userId);
+    
+    if (bio !== undefined) user.bio = bio.substring(0, 500);
+    if (location !== undefined) user.location = location.substring(0, 100);
+    if (interests !== undefined) {
+      user.interests = interests.split(',').map(i => i.trim()).filter(Boolean).slice(0, 20);
+    }
+    
+    await user.save();
+    req.flash('success', 'Profile updated!');
+    res.redirect('/profile');
+  } catch (error) {
+    console.error('Profile update error:', error.message);
+    req.flash('error', 'Failed to update profile');
+    res.redirect('/profile');
+  }
+});
+
+// Matches
+app.get('/matches', async (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect('/login');
+  }
+  
+  try {
+    const Match = require('./models/Match');
+    const User = require('./models/User');
+    
+    const matches = await Match.find({
+      $or: [{ user1: req.session.userId }, { user2: req.session.userId }],
+      status: 'accepted'
+    }).populate('user1', 'username age profileImage')
+      .populate('user2', 'username age profileImage');
+    
+    const matchList = matches.map(m => {
+      return m.user1._id.toString() === req.session.userId ? m.user2 : m.user1;
+    });
+    
+    res.render('matches', { title: 'My Matches', matches: matchList });
+  } catch (error) {
+    console.error('Matches error:', error.message);
+    res.redirect('/dashboard');
+  }
+});
+
+// Like User
+app.post('/like/:userId', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  try {
+    const { userId } = req.params;
+    const Match = require('./models/Match');
+    
+    let match = await Match.findOne({
+      $or: [
+        { user1: req.session.userId, user2: userId },
+        { user1: userId, user2: req.session.userId }
+      ]
+    });
+    
+    if (!match) {
+      match = new Match({
+        user1: req.session.userId,
+        user2: userId,
+        likedBy: [{ userId: req.session.userId }]
+      });
+      await match.save();
+    } else {
+      const alreadyLiked = match.likedBy?.some(l => l.userId?.toString() === req.session.userId);
+      if (!alreadyLiked) {
+        match.likedBy.push({ userId: req.session.userId });
+        await match.save();
+      }
+    }
+    
+    const isMatch = match.likedBy.length >= 2;
+    res.json({ success: true, isMatch, message: isMatch ? "It's a match!" : "Like sent!" });
+  } catch (error) {
+    console.error('Like error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed' });
+  }
+});
+
+// Messages
+app.get('/messages/:matchId', async (req, res) => {
+  if (!req.session.userId) {
+    return res.redirect('/login');
+  }
+  
+  try {
+    const { matchId } = req.params;
+    const Match = require('./models/Match');
+    const Message = require('./models/Message');
+    const User = require('./models/User');
+    
+    const match = await Match.findOne({
+      _id: matchId,
+      $or: [{ user1: req.session.userId }, { user2: req.session.userId }],
+      status: 'accepted'
+    });
+    
+    if (!match) return res.redirect('/matches');
+    
+    const otherId = match.user1.toString() === req.session.userId ? match.user2 : match.user1;
+    const otherUser = await User.findById(otherId);
+    const messages = await Message.find({ matchId }).populate('sender', 'username').sort({ createdAt: 1 });
+    
+    res.render('messages', { title: 'Messages', match, otherUser, messages });
+  } catch (error) {
+    console.error('Messages error:', error.message);
+    res.redirect('/matches');
+  }
+});
+
+// 404 Handler
+app.use((req, res) => {
+  if (res.headersSent) return;
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
@@ -273,33 +559,24 @@ app.use((req, res) => {
   });
 });
 
-// ============================================
-// 🚨 GLOBAL ERROR HANDLER (FIXED)
-// ============================================
-
+// Error Handler
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   
-  // Check if headers already sent - CRITICAL FIX
   if (res.headersSent) {
-    console.error('Headers already sent, cannot render error page');
     return next(err);
   }
   
-  // Log the error stack for debugging
   console.error('Stack:', err.stack);
   
-  // Send JSON response for API requests
   if (req.headers.accept?.includes('application/json')) {
     return res.status(err.status || 500).json({
       error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
   }
   
-  // Render error page for browser requests
   res.status(err.status || 500);
   
-  // Try to render error page, with fallback
   try {
     res.render('error', {
       title: 'Error',
@@ -308,7 +585,6 @@ app.use((err, req, res, next) => {
     });
   } catch (renderErr) {
     console.error('Failed to render error page:', renderErr.message);
-    // Ultimate fallback - plain text response
     res.type('text').send('500 - Internal Server Error');
   }
 });
@@ -325,7 +601,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // ============================================
-// 🛑 GRACEFUL SHUTDOWN (Render Requirement)
+// 🛑 GRACEFUL SHUTDOWN
 // ============================================
 
 process.on('SIGTERM', () => {
@@ -348,36 +624,12 @@ process.on('SIGINT', () => {
   });
 });
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err.message);
-  // Don't exit immediately - let Express handle
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
-  // Don't exit - let the app continue
 });
 
 module.exports = app;
-// TEMPORARY DEBUG - REMOVE AFTER TESTING
-app.get('/debug/db', async (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
-  
-  try {
-    await mongoose.connection.db.admin().ping();
-    res.json({ 
-      success: true, 
-      message: 'MongoDB ping successful',
-      uri: process.env.MONGODB_URI ? 'Set' : 'NOT SET'
-    });
-  } catch (e) {
-    res.status(500).json({ 
-      success: false, 
-      error: e.message,
-      readyState: mongoose.connection.readyState,
-      uri: process.env.MONGODB_URI ? 'Set (hidden)' : 'NOT SET'
-    });
-  }
-});
