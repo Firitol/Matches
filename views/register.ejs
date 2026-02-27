@@ -4,13 +4,12 @@
   <h1 style="text-align:center;color:#26EAED;margin-bottom:1rem">🇪🇹 EthioMatch</h1>
   <p style="text-align:center;color:#f44336;font-weight:bold;margin-bottom:2rem">⚠️ You must be 18+ to join</p>
   
-  <form action="/register" method="POST" style="display:flex;flex-direction:column;gap:1rem">
+  <form action="/register" method="POST" id="registerForm" style="display:flex;flex-direction:column;gap:1rem">
     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
     
     <div>
       <label style="display:block;margin-bottom:0.5rem;font-weight:600">Username</label>
-      <input type="text" name="username" required minlength="3" maxlength="30" 
-             placeholder="Choose a username"
+      <input type="text" name="username" required minlength="3" maxlength="30" placeholder="Choose a username"
              style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
     </div>
     
@@ -24,32 +23,27 @@
       <label style="display:block;margin-bottom:0.5rem;font-weight:600">Password</label>
       <input type="password" name="password" required minlength="8" placeholder="Min 8 characters"
              style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
-      <small style="color:#666">Min 8 characters</small>
     </div>
     
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      
-<div>
-  <label style="display:block;margin-bottom:0.5rem;font-weight:600">Age</label>
-  <input 
-    type="number" 
-    name="age" 
-    required 
-    min="18" 
-    max="100" 
-    step="1"
-    inputmode="numeric"
-    pattern="[0-9]*"
-    placeholder="25"
-    autocomplete="off"
-    style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px;font-size:1rem"
-  >
-  <small style="color:#666;display:block;margin-top:0.25rem">Must be 18 or older</small>
+      <div>
+        <label style="display:block;margin-bottom:0.5rem;font-weight:600">Age ⚠️</label>
+        <input type="number" 
+               name="age" 
+               id="ageInput"
+               required 
+               min="18" 
+               max="100" 
+               step="1"
+               value=""
+               placeholder="25"
+               style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px;font-size:1rem">
+        <small id="ageError" style="color:#f44336;display:none;margin-top:0.25rem">Must be 18-100</small>
       </div>
       <div>
         <label style="display:block;margin-bottom:0.5rem;font-weight:600">Gender</label>
-        <select name="gender" required
-                style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+        <select name="gender" required style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+          <option value="" disabled selected>Select</option>
           <option value="Male">Male</option>
           <option value="Female">Female</option>
           <option value="Other">Other</option>
@@ -59,8 +53,8 @@
     
     <div>
       <label style="display:block;margin-bottom:0.5rem;font-weight:600">Looking For</label>
-      <select name="lookingFor" required
-              style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+      <select name="lookingFor" required style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+        <option value="" disabled selected>Select</option>
         <option value="Male">Male</option>
         <option value="Female">Female</option>
         <option value="Both">Both</option>
@@ -78,7 +72,7 @@
       <span>I am 18+ and agree to Terms of Service</span>
     </label>
     
-    <button type="submit" style="padding:0.75rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:6px;font-weight:600;cursor:pointer">
+    <button type="submit" id="submitBtn" style="padding:0.75rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:1rem">
       Create Account
     </button>
   </form>
@@ -87,26 +81,43 @@
     Already have an account? <a href="/login" style="color:#26EAED">Login</a>
   </p>
 </div>
+
 <script>
-// Client-side age validation
-document.querySelector('form').addEventListener('submit', function(e) {
-  const ageInput = document.querySelector('input[name="age"]');
+// Client-side validation
+document.getElementById('registerForm').addEventListener('submit', function(e) {
+  const ageInput = document.getElementById('ageInput');
+  const ageError = document.getElementById('ageError');
+  const submitBtn = document.getElementById('submitBtn');
+  
   const age = parseInt(ageInput.value, 10);
   
-  console.log('Form submit - Age value:', ageInput.value);
-  console.log('Form submit - Age parsed:', age);
+  console.log('🔍 Form Submit Debug:');
+  console.log('  Age value:', ageInput.value);
+  console.log('  Age parsed:', age);
+  console.log('  Age >= 18:', age >= 18);
   
   if (!ageInput.value || isNaN(age) || age < 18 || age > 100) {
     e.preventDefault();
-    alert('You must be 18-100 years old to register');
+    ageError.style.display = 'block';
+    ageError.textContent = 'You must be 18-100 years old (you entered: ' + (ageInput.value || 'empty') + ')';
     ageInput.focus();
+    ageInput.style.borderColor = '#f44336';
     return false;
   }
   
-  // Disable button to prevent double submit
-  const submitBtn = this.querySelector('button[type="submit"]');
+  // Valid - proceed
+  ageError.style.display = 'none';
+  ageInput.style.borderColor = '#2D6A4F';
   submitBtn.disabled = true;
   submitBtn.textContent = 'Creating Account...';
+  submitBtn.style.opacity = '0.7';
+});
+
+// Clear error on input
+document.getElementById('ageInput').addEventListener('input', function() {
+  document.getElementById('ageError').style.display = 'none';
+  this.style.borderColor = '#e0e0e0';
 });
 </script>
+
 <%- include('partials/footer') %>
