@@ -1,117 +1,122 @@
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const session = require('express-session');
-const MongoStore = require('connect-mongo');
-const bcrypt = require('bcryptjs');
-const path = require('path');
-const User = require('./models/User');
-
-const app = express();
-
-// 1. Database Connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.error(err));
-
-// 2. Middleware
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: true }));
-
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
-  cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
-}));
-
-// 3. Middleware to check login
-const requireLogin = (req, res, next) => {
-  if (!req.session.userId) return res.redirect('/login');
-  next();
-};
-
-// 4. Routes
-
-// Home Page
-app.get('/', (req, res) => {
-  res.redirect('/login');
-});
-
-// Register
-app.get('/register', (req, res) => res.render('register'));
-
+// Register POST - BULLETPROOF AGE VALIDATION
 app.post('/register', async (req, res) => {
-  const { username, password, age, gender, lookingFor } = req.body;
-  
-  // 18+ Validation
-  if (age < 18) return res.send("You must be 18+ to join EthioMatch.");
-
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, password: hashedPassword, age, gender, lookingFor });
+    console.log('🔍 REGISTRATION ATTEMPT');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    
+    const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
+    
+    // 🔧 FIX 1: Clean and parse age multiple ways
+    let ageValue = age;
+    
+    // Remove any non-numeric characters except decimal
+    if (typeof ageValue === 'string') {
+      ageValue = ageValue.replace(/[^0-9]/g, '');
+    }
+    
+    // Convert to number
+    const ageNumber = Number(ageValue);
+    
+    console.log('🔍 Age Debug:');
+    console.log('  - Raw:', age);
+    console.log('  - Cleaned:', ageValue);
+    console.log('  - Type:', typeof age);
+    console.log('  - Parsed:', ageNumber);
+    console.log('  - Is NaN:', isNaN(ageNumber));
+    console.log('  - Is >= 18:', ageNumber >= 18);
+    
+    // 🔧 FIX 2: Comprehensive validation
+    const errors = [];
+    
+    if (!username || username.trim().length < 3) {
+      errors.push('Username must be at least 3 characters');
+    }
+    
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      errors.push('Please enter a valid email');
+    }
+    
+    if (!password || password.length < 8) {
+      errors.push('Password must be at least 8 characters');
+    }
+    
+    // 🔧 FIX 3: Age validation - be very explicit
+    if (!age && age !== 0 && age !== '0') {
+      errors.push('Age is required');
+    } else if (isNaN(ageNumber)) {
+      errors.push('Age must be a number');
+    } else if (ageNumber < 18) {
+      errors.push('You must be 18 or older (you entered: ' + ageNumber + ')');
+    } else if (ageNumber > 100) {
+      errors.push('Age must be 100 or less');
+    }
+    
+    if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
+      errors.push('Please select a valid gender');
+    }
+    
+    if (!lookingFor || !['Male', 'Female', 'Both'].includes(lookingFor)) {
+      errors.push('Please select what you are looking for');
+    }
+    
+    if (!terms) {
+      errors.push('You must agree to the Terms of Service');
+    }
+    
+    // If any errors, show them
+    if (errors.length > 0) {
+      console.log('❌ Validation errors:', errors);
+      req.flash('error', errors);
+      return res.redirect('/register');
+    }
+    
+    const User = require('./models/User');
+    
+    // Check for existing user
+    const existing = await User.findOne({ 
+      $or: [{ username: new RegExp('^' + username.trim() + '$', 'i') }, 
+            { email: email.toLowerCase() }] 
+    });
+    
+    if (existing) {
+      req.flash('error', 'Username or email already exists');
+      return res.redirect('/register');
+    }
+    
+    // 🔧 FIX 4: Create user with explicit age as Number
+    const user = new User({
+      username: username.trim(),
+      email: email.toLowerCase(),
+      password: password,
+      age: ageNumber,  // Explicitly a Number
+      gender: gender,
+      lookingFor: lookingFor,
+      location: location || 'Ethiopia',
+      isActive: true,
+      isVerified: false
+    });
+    
+    console.log('✅ Creating user:', user.username, 'Age:', user.age, 'Type:', typeof user.age);
+    
     await user.save();
+    
+    console.log('✅ User created successfully! ID:', user._id);
+    
+    req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
-  } catch (err) {
-    res.send("Error creating account. Username might be taken.");
+    
+  } catch (error) {
+    console.error('❌ Register error:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    let errorMsg = 'Registration failed. Please try again.';
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      errorMsg = Object.values(error.errors).map(e => e.message).join(', ');
+    }
+    
+    req.flash('error', errorMsg);
+    res.redirect('/register');
   }
-});
-
-// Login
-app.get('/login', (req, res) => res.render('login'));
-
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  const user = await User.findOne({ username });
-  
-  if (user && await bcrypt.compare(password, user.password)) {
-    req.session.userId = user._id;
-    req.session.username = user.username;
-    res.redirect('/dashboard');
-  } else {
-    res.send("Invalid credentials");
-  }
-});
-
-// Dashboard (Match Finder)
-app.get('/dashboard', requireLogin, async (req, res) => {
-  const currentUser = await User.findById(req.session.userId);
-  
-  // Find matches (excluding self)
-  // Simple logic: Find users of the gender the current user is looking for
-  const matches = await User.find({ 
-    _id: { $ne: req.session.userId },
-    gender: currentUser.lookingFor 
-  }).limit(10);
-
-  res.render('dashboard', { user: currentUser, matches });
-});
-
-// Logout
-app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
-});
-
-// 5. Start Server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`EthioMatch running on port ${PORT}`);
-});
-// Add to server.js (REMOVE AFTER TESTING)
-app.post('/debug/age-test', (req, res) => {
-  const { age } = req.body;
-  const ageNumber = parseInt(String(age).trim(), 10);
-  
-  res.json({
-    raw: age,
-    type: typeof age,
-    parsed: ageNumber,
-    isNaN: isNaN(ageNumber),
-    isValid: !isNaN(ageNumber) && ageNumber >= 18 && ageNumber <= 100,
-    message: !isNaN(ageNumber) && ageNumber >= 18 ? 'VALID' : 'INVALID'
-  });
 });
