@@ -87,5 +87,26 @@
     Already have an account? <a href="/login" style="color:#26EAED">Login</a>
   </p>
 </div>
-
+<script>
+// Client-side age validation
+document.querySelector('form').addEventListener('submit', function(e) {
+  const ageInput = document.querySelector('input[name="age"]');
+  const age = parseInt(ageInput.value, 10);
+  
+  console.log('Form submit - Age value:', ageInput.value);
+  console.log('Form submit - Age parsed:', age);
+  
+  if (!ageInput.value || isNaN(age) || age < 18 || age > 100) {
+    e.preventDefault();
+    alert('You must be 18-100 years old to register');
+    ageInput.focus();
+    return false;
+  }
+  
+  // Disable button to prevent double submit
+  const submitBtn = this.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Creating Account...';
+});
+</script>
 <%- include('partials/footer') %>
