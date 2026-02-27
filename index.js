@@ -62,7 +62,7 @@
                 gap: 0.5rem;
                 padding: 1rem 2rem;
                 background: linear-gradient(135deg, #D4AF37, #B89628);
-                color: #1A1A2E;
+                color: #F5F3FF;
                 text-decoration: none;
                 border-radius: 0.75rem;
                 font-weight: 700;
