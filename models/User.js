@@ -25,12 +25,12 @@ const userSchema = new mongoose.Schema({
     minlength: 8,
     select: false
   },
-  age: {
-    type: Number,
-    required: [true, 'Age is required'],
-    min: [18, 'You must be 18 or older'],
-    max: [100, 'Please enter a valid age']
-  },
+age: {
+  type: Number,
+  required: [true, 'Age is required'],
+  min: [18, 'You must be 18 or older'],
+  max: [100, 'Please enter a valid age']
+},
   gender: {
     type: String,
     required: [true, 'Gender is required'],
