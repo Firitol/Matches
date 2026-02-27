@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="EthioMatch - Find serious relationships with Ethiopians worldwide">
     <title><%= typeof title !== 'undefined' ? title + ' - ' : '' %>EthioMatch</title>
-    
+    <script>
+  console.log('CSRF Token:', '<%= typeof csrfToken !== 'undefined' ? csrfToken : 'MISSING' %>');
+</script>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
