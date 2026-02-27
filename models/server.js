@@ -101,3 +101,17 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`EthioMatch running on port ${PORT}`);
 });
+// Add to server.js (REMOVE AFTER TESTING)
+app.post('/debug/age-test', (req, res) => {
+  const { age } = req.body;
+  const ageNumber = parseInt(String(age).trim(), 10);
+  
+  res.json({
+    raw: age,
+    type: typeof age,
+    parsed: ageNumber,
+    isNaN: isNaN(ageNumber),
+    isValid: !isNaN(ageNumber) && ageNumber >= 18 && ageNumber <= 100,
+    message: !isNaN(ageNumber) && ageNumber >= 18 ? 'VALID' : 'INVALID'
+  });
+});
