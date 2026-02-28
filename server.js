@@ -1,11 +1,21 @@
 // server.js - VERCEL + NEON PRODUCTION READY
 require('dotenv').config();
 
-console.log('🔍 DEBUG - Environment Check:');
-console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-console.log('DATABASE_URL length:', process.env.DATABASE_URL?.length);
-console.log('DATABASE_URL starts with postgres://:', process.env.DATABASE_URL?.startsWith('postgres://'));
+// 🔍 DEBUG: Log environment variables
+console.log('=== ENVIRONMENT DEBUG ===');
 console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+if (process.env.DATABASE_URL) {
+  console.log('DATABASE_URL length:', process.env.DATABASE_URL.length);
+  console.log('DATABASE_URL starts with postgres://:', process.env.DATABASE_URL.startsWith('postgres://'));
+  // Log first 80 chars (hide password)
+  const [protocol, rest] = process.env.DATABASE_URL.split('://');
+  const [creds, hostPart] = rest.split('@');
+  const [host, path] = hostPart.split('/');
+  console.log('DATABASE_URL parsed host:', host);
+  console.log('DATABASE_URL parsed database:', path?.split('?')[0]);
+}
+console.log('=========================');
 const express = require('express');
 const session = require('express-session');
 const PostgreSQLStore = require('connect-pg-simple')(session);
