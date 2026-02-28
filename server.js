@@ -1,6 +1,11 @@
 // server.js - VERCEL + NEON PRODUCTION READY
 require('dotenv').config();
 
+console.log('🔍 DEBUG - Environment Check:');
+console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+console.log('DATABASE_URL length:', process.env.DATABASE_URL?.length);
+console.log('DATABASE_URL starts with postgres://:', process.env.DATABASE_URL?.startsWith('postgres://'));
+console.log('NODE_ENV:', process.env.NODE_ENV);
 const express = require('express');
 const session = require('express-session');
 const PostgreSQLStore = require('connect-pg-simple')(session);
