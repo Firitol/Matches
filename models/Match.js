@@ -12,18 +12,12 @@ const Match = sequelize.define('Match', {
   user1Id: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: {
-      model: User,
-      key: 'id'
-    }
+    references: { model: User, key: 'id' }
   },
   user2Id: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: {
-      model: User,
-      key: 'id'
-    }
+    references: { model: User, key: 'id' }
   },
   status: {
     type: DataTypes.ENUM('pending', 'accepted', 'rejected', 'blocked'),
@@ -36,12 +30,7 @@ const Match = sequelize.define('Match', {
 }, {
   tableName: 'matches',
   timestamps: true,
-  indexes: [
-    {
-      unique: true,
-      fields: ['user1Id', 'user2Id']
-    }
-  ]
+  indexes: [{ unique: true, fields: ['user1Id', 'user2Id'] }]
 });
 
 // Associations
