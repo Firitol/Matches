@@ -637,3 +637,30 @@ process.on('SIGTERM', () => {
 });
 
 module.exports = app;
+// 🔍 TEMPORARY DEBUG ROUTE - REMOVE AFTER TESTING
+app.get('/debug/env', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  
+  const dbUrl = process.env.DATABASE_URL;
+  
+  res.json({
+    NODE_ENV: process.env.NODE_ENV,
+    DATABASE_URL: {
+      exists: !!dbUrl,
+      length: dbUrl?.length,
+      startsWith: dbUrl?.substring(0, 20) + '...',
+      hasSSL: dbUrl?.includes('sslmode=require'),
+      // Parse hostname
+      hostname: dbUrl ? (() => {
+        try {
+          const url = new URL(dbUrl);
+          return url.hostname;
+        } catch {
+          return 'INVALID_URL';
+        }
+      })() : null
+    },
+    SESSION_SECRET: process.env.SESSION_SECRET ? 'SET' : 'MISSING',
+    CSRF_SECRET: process.env.CSRF_SECRET ? 'SET' : 'MISSING'
+  });
+});
