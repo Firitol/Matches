@@ -29,6 +29,7 @@ const { Sequelize, Op } = require('sequelize');
 const app = express();
 
 // ============================================
+// ============================================
 // 🗄️ NEON POSTGRESQL DATABASE CONNECTION
 // ============================================
 
@@ -36,13 +37,52 @@ let sequelize;
 
 const connectDB = async () => {
   try {
+    // Debug logging
+    console.log('🔍 DATABASE_URL Debug:');
+    console.log('  - Exists:', !!process.env.DATABASE_URL);
+    console.log('  - Type:', typeof process.env.DATABASE_URL);
+    console.log('  - Length:', process.env.DATABASE_URL?.length);
+    console.log('  - Trimmed:', process.env.DATABASE_URL?.trim() === process.env.DATABASE_URL);
+    
     if (!process.env.DATABASE_URL) {
-      console.error('❌ DATABASE_URL not set');
+      console.error('❌ FATAL: DATABASE_URL is not set!');
+      console.error('   Add it in Vercel Dashboard → Settings → Environment Variables');
       return null;
     }
     
-    // Neon connection with pooling + SSL
-    sequelize = new Sequelize(process.env.DATABASE_URL, {
+    // Clean the connection string (remove quotes, whitespace)
+    let dbUrl = process.env.DATABASE_URL.trim();
+    
+    // Remove common prefixes/suffixes
+    if (dbUrl.startsWith('"') && dbUrl.endsWith('"')) {
+      dbUrl = dbUrl.slice(1, -1);
+      console.log('🔧 Removed surrounding quotes from DATABASE_URL');
+    }
+    if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) {
+      dbUrl = dbUrl.slice(1, -1);
+      console.log('🔧 Removed surrounding single quotes from DATABASE_URL');
+    }
+    if (dbUrl.startsWith('psql ')) {
+      dbUrl = dbUrl.replace(/^psql\s+/, '');
+      console.log('🔧 Removed psql prefix from DATABASE_URL');
+    }
+    
+    // Ensure correct protocol
+    if (dbUrl.startsWith('postgresql://')) {
+      dbUrl = dbUrl.replace('postgresql://', 'postgres://');
+      console.log('🔧 Changed postgresql:// to postgres://');
+    }
+    
+    // Ensure sslmode is present
+    if (!dbUrl.includes('sslmode=')) {
+      dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
+      console.log('🔧 Added sslmode=require to DATABASE_URL');
+    }
+    
+    console.log('✅ Cleaned DATABASE_URL ready for connection');
+    
+    // Connect with cleaned URL
+    sequelize = new Sequelize(dbUrl, {
       dialect: 'postgres',
       protocol: 'postgres',
       logging: process.env.NODE_ENV === 'development' ? console.log : false,
@@ -58,7 +98,6 @@ const connectDB = async () => {
         acquire: 30000,
         idle: 10000
       },
-      // Vercel serverless optimization
       retry: {
         match: [/Deadlock/i, /Transaction/i, /Connection/i],
         max: 3
@@ -66,15 +105,16 @@ const connectDB = async () => {
     });
     
     await sequelize.authenticate();
-    console.log('✅ Neon PostgreSQL Connected');
+    console.log('✅ Neon PostgreSQL Connected Successfully!');
     
-    // Sync models (create tables if they don't exist)
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
     
     return sequelize;
   } catch (error) {
     console.error('❌ Neon Connection Error:', error.message);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Full error:', error);
     return null;
   }
 };
