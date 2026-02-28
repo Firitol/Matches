@@ -1,4 +1,4 @@
-// server.js - RENDER PRODUCTION READY (PostgreSQL + Age Bypass)
+// server.js - VERCEL + NEON PRODUCTION READY
 require('dotenv').config();
 
 const express = require('express');
@@ -14,7 +14,7 @@ const { Sequelize, Op } = require('sequelize');
 const app = express();
 
 // ============================================
-// 🗄️ POSTGRESQL DATABASE CONNECTION
+// 🗄️ NEON POSTGRESQL DATABASE CONNECTION
 // ============================================
 
 let sequelize;
@@ -22,10 +22,11 @@ let sequelize;
 const connectDB = async () => {
   try {
     if (!process.env.DATABASE_URL) {
-      console.warn('⚠️ DATABASE_URL not set, using fallback');
-      process.env.DATABASE_URL = 'postgres://localhost:5432/ethiomatch';
+      console.error('❌ DATABASE_URL not set');
+      return null;
     }
     
+    // Neon connection with pooling + SSL
     sequelize = new Sequelize(process.env.DATABASE_URL, {
       dialect: 'postgres',
       protocol: 'postgres',
@@ -41,11 +42,16 @@ const connectDB = async () => {
         min: 0,
         acquire: 30000,
         idle: 10000
+      },
+      // Vercel serverless optimization
+      retry: {
+        match: [/Deadlock/i, /Transaction/i, /Connection/i],
+        max: 3
       }
     });
     
     await sequelize.authenticate();
-    console.log('✅ PostgreSQL Connected');
+    console.log('✅ Neon PostgreSQL Connected');
     
     // Sync models (create tables if they don't exist)
     await sequelize.sync({ alter: true });
@@ -53,25 +59,23 @@ const connectDB = async () => {
     
     return sequelize;
   } catch (error) {
-    console.error('❌ PostgreSQL Connection Error:', error.message);
-    // Don't exit - allow health checks to work
+    console.error('❌ Neon Connection Error:', error.message);
     return null;
   }
 };
 
+// Initialize database
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION (PostgreSQL)
+// 📦 SESSION CONFIGURATION (Neon PostgreSQL)
 // ============================================
 
 app.use(session({
   store: new PostgreSQLStore({
     conObject: {
       connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false
-      }
+      ssl: { rejectUnauthorized: false }
     },
     tableName: 'session',
     createTableIfMissing: true,
@@ -81,7 +85,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production', // Vercel uses HTTPS
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax'
@@ -106,10 +110,9 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ============================================
-// 🔐 CSRF PROTECTION (Temporary Bypass)
+// 🔐 CSRF PROTECTION (Temporary Bypass for Debug)
 // ============================================
 
-// TEMPORARY: Disable CSRF for debugging registration issues
 app.use((req, res, next) => {
   res.locals.csrfToken = 'bypass-token';
   next();
@@ -251,7 +254,7 @@ app.get('/register', (req, res) => {
   }
 });
 
-// 🔧 Register POST - TEMPORARY BYPASS FOR AGE VALIDATION
+// Register POST - TEMPORARY BYPASS FOR AGE VALIDATION
 app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
@@ -558,46 +561,24 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 🚀 START SERVER
+// 🚀 START SERVER (Vercel Compatible)
 // ============================================
 
 const PORT = process.env.PORT || 3000;
 
-const server = app.listen(PORT, '0.0.0.0', () => {
+// Vercel uses app.listen without callback for serverless
+const server = app.listen(PORT, () => {
   console.log(`🚀 EthioMatch running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-// ============================================
-// 🛑 GRACEFUL SHUTDOWN
-// ============================================
-
+// Graceful shutdown for Vercel
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    sequelize.close(() => {
-      console.log('PostgreSQL connection closed');
-      process.exit(0);
-    });
+    if (sequelize) sequelize.close();
+    process.exit(0);
   });
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    sequelize.close(() => {
-      console.log('PostgreSQL connection closed');
-      process.exit(0);
-    });
-  });
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err.message);
-});
-
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
 });
 
 module.exports = app;
