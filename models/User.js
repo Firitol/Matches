@@ -13,34 +13,23 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(30),
     allowNull: false,
     unique: true,
-    validate: {
-      len: [3, 30],
-      isAlphanumeric: true
-    }
+    validate: { len: [3, 30] }
   },
   email: {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true,
-    validate: {
-      isEmail: true
-    }
+    validate: { isEmail: true }
   },
   password: {
     type: DataTypes.STRING,
     allowNull: false,
-    validate: {
-      len: [8, 100]
-    }
+    validate: { len: [8, 100] }
   },
   age: {
     type: DataTypes.INTEGER,  // ✅ Always a number!
     allowNull: false,
-    validate: {
-      isInt: true,
-      min: 18,  // ✅ Enforced by database
-      max: 100
-    }
+    validate: { isInt: true, min: 18, max: 100 }
   },
   gender: {
     type: DataTypes.ENUM('Male', 'Female', 'Other'),
@@ -91,7 +80,6 @@ const User = sequelize.define('User', {
   }
 });
 
-// Instance methods
 User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
