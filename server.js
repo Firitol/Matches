@@ -26,7 +26,6 @@ const connectDB = async () => {
       return null;
     }
     
-    // Clean connection string (remove quotes, whitespace, wrong protocol)
     let dbUrl = process.env.DATABASE_URL.trim();
     if (dbUrl.startsWith('"') && dbUrl.endsWith('"')) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
@@ -48,7 +47,6 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
     
-    // Sync models (create tables if they don't exist)
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
     
@@ -59,11 +57,10 @@ const connectDB = async () => {
   }
 };
 
-// Initialize database on startup
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION (Vercel + Neon)
+// 📦 SESSION CONFIGURATION
 // ============================================
 
 app.use(session({
@@ -88,24 +85,7 @@ app.use(session({
   },
   name: 'ethiomatch.sid'
 }));
-// 🔍 SESSION DEBUG MIDDLEWARE (Add after app.use(session(...)))
-app.use((req, res, next) => {
-  // Only log in development or when ?debug=session is in URL
-  const isDebug = process.env.NODE_ENV === 'development' || req.query.debug === 'session';
-  
-  if (isDebug) {
-    console.log('🔍 Session Debug:', {
-      path: req.path,
-      method: req.method,
-      sessionId: req.sessionID?.substring(0, 12) + '...',
-      userId: req.session?.userId,
-      username: req.session?.username,
-      cookie: req.headers.cookie?.substring(0, 100),
-      sessionStore: req.session?.store ? 'connected' : 'MISSING'
-    });
-  }
-  next();
-});
+
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
@@ -123,7 +103,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ============================================
-// 🔐 CSRF PROTECTION (Simple Token)
+// 🔐 CSRF TOKEN
 // ============================================
 
 app.use((req, res, next) => {
@@ -180,8 +160,6 @@ app.use(async (req, res, next) => {
   res.locals.appName = constants.APP_NAME;
   res.locals.currentYear = new Date().getFullYear();
   res.locals.constants = constants;
-  
-  // Helper functions for templates
   res.locals.formatDate = (date) => new Date(date).toLocaleDateString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric'
   });
@@ -189,7 +167,6 @@ app.use(async (req, res, next) => {
     if (!text) return '';
     return text.length > length ? text.substring(0, length) + '...' : text;
   };
-  
   next();
 });
 
@@ -197,7 +174,7 @@ app.use(async (req, res, next) => {
 // 🚦 ROUTES
 // ============================================
 
-// 🏥 Health Check
+// Health Check
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
   try {
@@ -206,7 +183,6 @@ app.get('/health', async (req, res) => {
   } catch (e) {
     dbStatus = 'error: ' + e.message;
   }
-  
   res.json({
     status: dbStatus === 'connected' ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
@@ -216,7 +192,7 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// 🏠 Home Page
+// Home Page
 app.get('/', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -225,7 +201,7 @@ app.get('/', (req, res) => {
   }
 });
 
-// 🔐 Login GET
+// Login GET
 app.get('/login', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -234,12 +210,11 @@ app.get('/login', (req, res) => {
   }
 });
 
-// 🔐 Login POST
+// Login POST
 app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     const User = require('./models/User');
-    
     const user = await User.findOne({
       where: {
         [Op.or]: [
@@ -248,28 +223,18 @@ app.post('/login', async (req, res) => {
         ]
       }
     });
-    
     if (!user || !(await user.comparePassword(password))) {
       req.flash('error', 'Invalid credentials');
       return res.redirect('/login');
     }
-    
     if (!user.isActive) {
       req.flash('error', 'Account deactivated');
       return res.redirect('/login');
     }
-    
     req.session.userId = user.id;
     req.session.username = user.username;
-    req.session.user = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      profileImage: user.profileImage
-    };
-    
+    req.session.user = { id: user.id, username: user.username, email: user.email };
     await user.updateLastActive().catch(() => {});
-    
     res.redirect('/dashboard');
   } catch (error) {
     console.error('Login error:', error.message);
@@ -278,7 +243,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// 📝 Register GET
+// Register GET
 app.get('/register', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -287,52 +252,40 @@ app.get('/register', (req, res) => {
   }
 });
 
-// 📝 Register POST - PRODUCTION READY
+// Register POST
 app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
-    
-    // Validate required fields
     if (!username || username.trim().length < 3) {
       req.flash('error', 'Username must be at least 3 characters');
       return res.redirect('/register');
     }
-    
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       req.flash('error', 'Please enter a valid email');
       return res.redirect('/register');
     }
-    
     if (!password || password.length < 8) {
       req.flash('error', 'Password must be at least 8 characters');
       return res.redirect('/register');
     }
-    
-    // Age validation: strict integer + bounds
     const ageNumber = parseInt(String(age).trim(), 10);
     if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
       req.flash('error', 'You must be 18-100 years old');
       return res.redirect('/register');
     }
-    
     if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
       req.flash('error', 'Please select a valid gender');
       return res.redirect('/register');
     }
-    
     if (!lookingFor || !['Male', 'Female', 'Both'].includes(lookingFor)) {
       req.flash('error', 'Please select what you are looking for');
       return res.redirect('/register');
     }
-    
     if (!terms) {
       req.flash('error', 'You must agree to the Terms of Service');
       return res.redirect('/register');
     }
-    
     const User = require('./models/User');
-    
-    // Check for existing user (case-insensitive)
     const existing = await User.findOne({
       where: {
         [Op.or]: [
@@ -341,13 +294,10 @@ app.post('/register', async (req, res) => {
         ]
       }
     });
-    
     if (existing) {
       req.flash('error', 'Username or email already exists');
       return res.redirect('/register');
     }
-    
-    // Create user - PostgreSQL + Sequelize enforce constraints
     const user = await User.create({
       username: username.trim(),
       email: email.toLowerCase(),
@@ -357,75 +307,81 @@ app.post('/register', async (req, res) => {
       lookingFor: lookingFor,
       location: location || 'Ethiopia'
     });
-    
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
-    
   } catch (error) {
     console.error('Register error:', error.message);
-    
     if (error.name === 'SequelizeValidationError') {
       const messages = error.errors.map(e => e.message);
       req.flash('error', messages);
     } else if (error.name === 'SequelizeUniqueConstraintError') {
       req.flash('error', 'Username or email already exists');
-    } else if (error.message.includes('users_age_check')) {
-      req.flash('error', 'Age must be between 18 and 100');
     } else {
       req.flash('error', 'Registration failed. Please try again.');
     }
-    
     res.redirect('/register');
   }
 });
 
-// 🚪 Logout
+// Logout
 app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
 });
 
-// 📊 Dashboard - WITH SESSION DEBUGGING
+// Dashboard
 app.get('/dashboard', async (req, res) => {
-  console.log('🔍 DASHBOARD ACCESS DEBUG:');
-  console.log('  - Path:', req.path);
-  console.log('  - Session ID:', req.sessionID);
-  console.log('  - req.session.userId:', req.session.userId);
-  console.log('  - req.session.username:', req.session.username);
-  console.log('  - Cookie header:', req.headers.cookie?.substring(0, 150));
-  console.log('  - Session store:', req.session.store ? '✅ connected' : '❌ MISSING');
-  
-  // 🔐 Authentication Check
-  if (!req.session.userId) {
-    console.log('❌ NO SESSION USER ID - Redirecting to login');
-    console.log('  - Full session:', JSON.stringify(req.session, null, 2));
-    req.flash('error', 'Session expired. Please login again.');
-    return res.redirect('/login');
-  }
-  
   try {
+    if (!req.session.userId) {
+      req.flash('error', 'Please login to continue');
+      return res.redirect('/login');
+    }
     const User = require('./models/User');
     const Match = require('./models/Match');
-    
-    console.log('✅ Session valid, fetching user:', req.session.userId);
-    
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
-    
-    console.log('  - User found:', !!user);
-    console.log('  - User isActive:', user?.isActive);
-    
     if (!user || !user.isActive) {
-      console.log('❌ User not found or inactive - destroying session');
       req.session.destroy();
+      req.flash('error', 'Account not found or deactivated');
       return res.redirect('/login');
     }
-    
-    console.log('✅ User authenticated:', user.username);
-    
-    // ... rest of your dashboard logic ...
-    
+    await user.updateLastActive().catch(() => {});
+    const acceptedMatches = await Match.findAll({
+      where: {
+        [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }],
+        status: 'accepted'
+      },
+      include: [
+        { model: User, as: 'user1', attributes: ['id', 'username', 'age', 'profileImage', 'location'] },
+        { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage', 'location'] }
+      ],
+      order: [['updatedAt', 'DESC']],
+      limit: 20
+    });
+    const matches = acceptedMatches.map(match => {
+      return match.user1Id === user.id ? match.user2 : match.user1;
+    }).filter(Boolean);
+    const matchedUserIds = matches.map(m => m.id);
+    const potentialMatches = await User.findAll({
+      where: {
+        id: { [Op.notIn]: [user.id, ...matchedUserIds] },
+        isActive: true,
+        gender: user.lookingFor,
+        age: { [Op.between]: [18, 100] }
+      },
+      attributes: ['id', 'username', 'age', 'bio', 'location', 'profileImage', 'interests'],
+      limit: 12,
+      order: [['lastActive', 'DESC']]
+    });
+    const [matchCount, likeCount] = await Promise.all([
+      Match.count({
+        where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'accepted' }
+      }),
+      Match.count({
+        where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'pending' }
+      })
+    ]);
     res.render('dashboard', {
       title: 'Dashboard',
       user: {
@@ -443,45 +399,30 @@ app.get('/dashboard', async (req, res) => {
         lastActive: user.lastActive,
         createdAt: user.createdAt
       },
-      matches: [],
-      potentialMatches: [],
-      stats: { matchCount: 0, likeCount: 0, potentialCount: 0 },
+      matches,
+      potentialMatches,
+      stats: { matchCount, likeCount, potentialCount: potentialMatches.length },
       activePage: 'dashboard'
     });
-    
   } catch (error) {
-    console.error('❌ Dashboard error:', error.message);
+    console.error('Dashboard error:', error.message);
     req.flash('error', 'Failed to load dashboard');
     res.redirect('/');
   }
 });
-  } catch (error) {
-    console.error('Dashboard error:', {
-      message: error.message,
-      userId: req.session?.userId,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-    
-    req.flash('error', 'Failed to load dashboard. Please try again.');
-    res.redirect('/');
-  }
-});
 
-// 👤 Profile GET
+// Profile GET
 app.get('/profile', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
-  
   try {
     const User = require('./models/User');
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
-    
     if (!user) {
       req.session.destroy();
       return res.redirect('/login');
     }
-    
     res.render('profile', { title: 'My Profile', user });
   } catch (error) {
     console.error('Profile error:', error.message);
@@ -489,23 +430,19 @@ app.get('/profile', async (req, res) => {
   }
 });
 
-// 👤 Profile POST
+// Profile POST
 app.post('/profile', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
-  
   try {
     const { bio, location, interests } = req.body;
     const User = require('./models/User');
     const user = await User.findByPk(req.session.userId);
-    
     if (!user) return res.redirect('/login');
-    
     if (bio !== undefined) user.bio = bio.substring(0, 500);
     if (location !== undefined) user.location = location.substring(0, 100);
     if (interests !== undefined) {
       user.interests = interests.split(',').map(i => i.trim()).filter(Boolean).slice(0, 20);
     }
-    
     await user.save();
     req.flash('success', 'Profile updated!');
     res.redirect('/profile');
@@ -516,14 +453,12 @@ app.post('/profile', async (req, res) => {
   }
 });
 
-// 💕 Matches
+// Matches
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
-  
   try {
     const Match = require('./models/Match');
     const User = require('./models/User');
-    
     const matches = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
@@ -534,11 +469,9 @@ app.get('/matches', async (req, res) => {
         { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage'] }
       ]
     });
-    
     const matchList = matches.map(m => {
       return m.user1Id === req.session.userId ? m.user2 : m.user1;
     });
-    
     res.render('matches', { title: 'My Matches', matches: matchList });
   } catch (error) {
     console.error('Matches error:', error.message);
@@ -546,16 +479,14 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// ❤️ Like User (API)
+// Like User
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
-  
   try {
     const { userId } = req.params;
     const Match = require('./models/Match');
-    
     let match = await Match.findOne({
       where: {
         [Op.or]: [
@@ -564,7 +495,6 @@ app.post('/like/:userId', async (req, res) => {
         ]
       }
     });
-    
     if (!match) {
       match = await Match.create({
         user1Id: req.session.userId,
@@ -578,28 +508,21 @@ app.post('/like/:userId', async (req, res) => {
         await match.save();
       }
     }
-    
     const isMatch = match.likedBy.length >= 2;
-    res.json({ 
-      success: true, 
-      isMatch, 
-      message: isMatch ? "🎉 It's a match!" : "❤️ Like sent!" 
-    });
+    res.json({ success: true, isMatch, message: isMatch ? "It's a match!" : "Like sent!" });
   } catch (error) {
     console.error('Like error:', error.message);
     res.status(500).json({ success: false, message: 'Failed' });
   }
 });
 
-// 💬 Messages
+// Messages
 app.get('/messages/:matchId', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
-  
   try {
     const { matchId } = req.params;
     const Match = require('./models/Match');
     const User = require('./models/User');
-    
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -611,11 +534,8 @@ app.get('/messages/:matchId', async (req, res) => {
         { model: User, as: 'user2', attributes: ['id', 'username', 'profileImage'] }
       ]
     });
-    
     if (!match) return res.redirect('/matches');
-    
     const otherUser = match.user1Id === req.session.userId ? match.user2 : match.user1;
-    
     res.render('messages', { title: 'Messages', match, otherUser, messages: [] });
   } catch (error) {
     console.error('Messages error:', error.message);
@@ -623,7 +543,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// ❌ 404 Handler
+// 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
   res.status(404).render('error', {
@@ -633,20 +553,16 @@ app.use((req, res) => {
   });
 });
 
-// 🚨 Global Error Handler
+// Error Handler
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
-  
   if (res.headersSent) return next(err);
-  
   if (req.headers.accept?.includes('application/json')) {
     return res.status(err.status || 500).json({
       error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
   }
-  
   res.status(err.status || 500);
-  
   try {
     res.render('error', {
       title: 'Error',
@@ -660,7 +576,7 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 🚀 START SERVER (Vercel Compatible)
+// 🚀 START SERVER
 // ============================================
 
 const PORT = process.env.PORT || 3000;
@@ -670,7 +586,6 @@ const server = app.listen(PORT, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-// Graceful shutdown for Vercel serverless
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
