@@ -59,10 +59,7 @@ const connectDB = async () => {
 
 connectDB();
 
-// ============================================
-// 📦 SESSION CONFIGURATION
-// ============================================
-
+// 📦 SESSION CONFIGURATION - Vercel Preview + Production Compatible
 app.use(session({
   store: new PostgreSQLStore({
     conObject: {
@@ -81,11 +78,14 @@ app.use(session({
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
-    path: '/'
+    path: '/',
+    // ✅ Critical: Allow cookies on Vercel preview domains
+    domain: process.env.VERCEL_URL 
+      ? '.' + process.env.VERCEL_URL.replace(/^https?:\/\//, '') 
+      : undefined
   },
   name: 'ethiomatch.sid'
 }));
-
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
