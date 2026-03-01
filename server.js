@@ -262,7 +262,7 @@ app.get('/login', (req, res) => {
   }
 });
 
-// Login POST
+// Login POST - Verify this exists in server.js
 app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -299,7 +299,6 @@ app.post('/login', async (req, res) => {
     res.redirect('/login');
   }
 });
-
 // Register GET
 app.get('/register', (req, res) => {
   if (req.session.userId) {
