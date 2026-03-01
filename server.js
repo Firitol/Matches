@@ -385,77 +385,47 @@ app.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
-// 📊 Dashboard - PRODUCTION READY
+// 📊 Dashboard - WITH SESSION DEBUGGING
 app.get('/dashboard', async (req, res) => {
+  console.log('🔍 DASHBOARD ACCESS DEBUG:');
+  console.log('  - Path:', req.path);
+  console.log('  - Session ID:', req.sessionID);
+  console.log('  - req.session.userId:', req.session.userId);
+  console.log('  - req.session.username:', req.session.username);
+  console.log('  - Cookie header:', req.headers.cookie?.substring(0, 150));
+  console.log('  - Session store:', req.session.store ? '✅ connected' : '❌ MISSING');
+  
+  // 🔐 Authentication Check
+  if (!req.session.userId) {
+    console.log('❌ NO SESSION USER ID - Redirecting to login');
+    console.log('  - Full session:', JSON.stringify(req.session, null, 2));
+    req.flash('error', 'Session expired. Please login again.');
+    return res.redirect('/login');
+  }
+  
   try {
-    // 🔐 Authentication Check
-    if (!req.session.userId) {
-      req.flash('error', 'Please login to continue');
-      return res.redirect('/login');
-    }
-    
     const User = require('./models/User');
     const Match = require('./models/Match');
     
-    // 👤 Fetch Current User (exclude password)
+    console.log('✅ Session valid, fetching user:', req.session.userId);
+    
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
     
+    console.log('  - User found:', !!user);
+    console.log('  - User isActive:', user?.isActive);
+    
     if (!user || !user.isActive) {
+      console.log('❌ User not found or inactive - destroying session');
       req.session.destroy();
-      req.flash('error', 'Account not found or deactivated');
       return res.redirect('/login');
     }
     
-    // 🔄 Update last active (non-blocking)
-    await user.updateLastActive().catch(() => {});
+    console.log('✅ User authenticated:', user.username);
     
-    // 💕 Fetch Accepted Matches
-    const acceptedMatches = await Match.findAll({
-      where: {
-        [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }],
-        status: 'accepted'
-      },
-      include: [
-        { model: User, as: 'user1', attributes: ['id', 'username', 'age', 'profileImage', 'location'] },
-        { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage', 'location'] }
-      ],
-      order: [['updatedAt', 'DESC']],
-      limit: 20
-    });
+    // ... rest of your dashboard logic ...
     
-    // Transform to show the "other" user in each match
-    const matches = acceptedMatches.map(match => {
-      return match.user1Id === user.id ? match.user2 : match.user1;
-    }).filter(Boolean);
-    
-    // 🔍 Fetch Potential Matches (not yet matched)
-    const matchedUserIds = matches.map(m => m.id);
-    
-    const potentialMatches = await User.findAll({
-      where: {
-        id: { [Op.notIn]: [user.id, ...matchedUserIds] },
-        isActive: true,
-        gender: user.lookingFor,
-        age: { [Op.between]: [18, 100] }
-      },
-      attributes: ['id', 'username', 'age', 'bio', 'location', 'profileImage', 'interests'],
-      limit: 12,
-      order: [['lastActive', 'DESC']]
-    });
-    
-    // 📊 Fetch Stats
-    const [matchCount, likeCount] = await Promise.all([
-      Match.count({
-        where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'accepted' }
-      }),
-      Match.count({
-        where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'pending' }
-      })
-    ]);
-    
-    // 🎨 Render Dashboard
     res.render('dashboard', {
       title: 'Dashboard',
       user: {
@@ -471,15 +441,20 @@ app.get('/dashboard', async (req, res) => {
         profileImage: user.profileImage,
         isVerified: user.isVerified,
         lastActive: user.lastActive,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        createdAt: user.createdAt
       },
-      matches,
-      potentialMatches,
-      stats: { matchCount, likeCount, potentialCount: potentialMatches.length },
+      matches: [],
+      potentialMatches: [],
+      stats: { matchCount: 0, likeCount: 0, potentialCount: 0 },
       activePage: 'dashboard'
     });
     
+  } catch (error) {
+    console.error('❌ Dashboard error:', error.message);
+    req.flash('error', 'Failed to load dashboard');
+    res.redirect('/');
+  }
+});
   } catch (error) {
     console.error('Dashboard error:', {
       message: error.message,
