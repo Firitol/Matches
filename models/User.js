@@ -26,11 +26,15 @@ const User = sequelize.define('User', {
     allowNull: false,
     validate: { len: [8, 100] }
   },
-  age: {
-    type: DataTypes.INTEGER,  // ✅ Always a number!
-    allowNull: false,
-    validate: { isInt: true, min: 18, max: 100 }
-  },
+ age: {
+  type: DataTypes.INTEGER,  
+  allowNull: false,
+  validate: {
+    isInt: true,            
+    min: 18,                
+    max: 100                
+  }
+},
   gender: {
     type: DataTypes.ENUM('Male', 'Female', 'Other'),
     allowNull: false
