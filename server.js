@@ -264,41 +264,96 @@ app.get('/login', (req, res) => {
   }
 });
 
-// Login POST - Verify this exists in server.js
-app.post('/login', async (req, res) => {
+// Register POST - PRODUCTION READY
+app.post('/register', async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
+    
+    // Validate required fields
+    if (!username || username.trim().length < 3) {
+      req.flash('error', 'Username must be at least 3 characters');
+      return res.redirect('/register');
+    }
+    
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      req.flash('error', 'Please enter a valid email');
+      return res.redirect('/register');
+    }
+    
+    if (!password || password.length < 8) {
+      req.flash('error', 'Password must be at least 8 characters');
+      return res.redirect('/register');
+    }
+    
+    // ✅ Age validation: convert to number + strict bounds check
+    const ageNumber = parseInt(String(age).trim(), 10);
+    if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
+      req.flash('error', 'You must be 18-100 years old');
+      return res.redirect('/register');
+    }
+    
+    if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
+      req.flash('error', 'Please select a valid gender');
+      return res.redirect('/register');
+    }
+    
+    if (!lookingFor || !['Male', 'Female', 'Both'].includes(lookingFor)) {
+      req.flash('error', 'Please select what you are looking for');
+      return res.redirect('/register');
+    }
+    
+    if (!terms) {
+      req.flash('error', 'You must agree to the Terms of Service');
+      return res.redirect('/register');
+    }
+    
     const User = require('./models/User');
     
-    const user = await User.findOne({
+    // Check for existing user (case-insensitive username)
+    const existing = await User.findOne({
       where: {
         [Op.or]: [
-          { username: username },
-          { email: username }
+          { username: { [Op.iLike]: username.trim() } },
+          { email: { [Op.iLike]: email.toLowerCase() } }
         ]
       }
     });
     
-    if (!user || !(await user.comparePassword(password))) {
-      req.flash('error', 'Invalid credentials');
-      return res.redirect('/login');
+    if (existing) {
+      req.flash('error', 'Username or email already exists');
+      return res.redirect('/register');
     }
     
-    if (!user.isActive) {
-      req.flash('error', 'Account deactivated');
-      return res.redirect('/login');
-    }
+    // Create user - PostgreSQL + Sequelize will enforce age constraint
+    const user = await User.create({
+      username: username.trim(),
+      email: email.toLowerCase(),
+      password: password,
+      age: ageNumber,  // Stored as INTEGER
+      gender: gender,
+      lookingFor: lookingFor,
+      location: location || 'Ethiopia'
+    });
     
-    req.session.userId = user.id;
-    req.session.username = user.username;
-    req.session.user = user;
-    await user.updateLastActive();
-    
-    res.redirect('/dashboard');
-  } catch (error) {
-    console.error('Login error:', error.message);
-    req.flash('error', 'Login failed');
+    req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
+    
+  } catch (error) {
+    console.error('Register error:', error.message);
+    
+    // Handle database/validation errors gracefully
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(e => e.message);
+      req.flash('error', messages);
+    } else if (error.name === 'SequelizeUniqueConstraintError') {
+      req.flash('error', 'Username or email already exists');
+    } else if (error.message.includes('users_age_check')) {
+      req.flash('error', 'Age must be between 18 and 100');
+    } else {
+      req.flash('error', 'Registration failed. Please try again.');
+    }
+    
+    res.redirect('/register');
   }
 });
 // Register GET
@@ -309,29 +364,6 @@ app.get('/register', (req, res) => {
     res.render('register', { title: 'Join EthioMatch' });
   }
 });
-
-// Register POST - TEMPORARY BYPASS FOR AGE VALIDATION
-app.post('/register', async (req, res) => {
-  try {
-    const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
-    
-    console.log('🔍 Registration attempt:', { username, age, gender });
-    
-    // TEMPORARY: Accept any age value for now
-    const ageNumber = age ? parseInt(String(age).replace(/[^0-9]/g, ''), 10) || 25 : 25;
-    
-    console.log('✅ Age accepted:', ageNumber);
-    
-    const User = require('./models/User');
-    
-    const existing = await User.findOne({
-      where: {
-        [Op.or]: [
-          { username: username },
-          { email: email }
-        ]
-      }
-    });
     
     if (existing) {
       req.flash('error', 'Username or email already exists');
