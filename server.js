@@ -542,6 +542,42 @@ app.get('/messages/:matchId', async (req, res) => {
     res.redirect('/matches');
   }
 });
+// 🔍 TEMPORARY DEBUG ROUTES (Remove after fixing)
+app.get('/debug/server', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    routes: {
+      login: 'GET /login, POST /login',
+      register: 'GET /register, POST /register',
+      dashboard: 'GET /dashboard',
+      health: 'GET /health'
+    },
+    env: {
+      NODE_ENV: process.env.NODE_ENV,
+      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'MISSING',
+      SESSION_SECRET: process.env.SESSION_SECRET ? 'SET (' + process.env.SESSION_SECRET.length + ' chars)' : 'MISSING'
+    }
+  });
+});
+
+app.get('/debug/login-test', (req, res) => {
+  res.send(`
+    <html>
+      <head><title>Login Debug</title></head>
+      <body>
+        <h1>Login Debug Test</h1>
+        <p>Session ID: ${req.sessionID}</p>
+        <p>Session userId: ${req.session.userId || 'NOT SET'}</p>
+        <p>Cookie: ${req.headers.cookie || 'NONE'}</p>
+        <hr>
+        <a href="/login">Go to Login</a> | 
+        <a href="/debug/server">Server Info</a> | 
+        <a href="/health">Health Check</a>
+      </body>
+    </html>
+  `);
+});
 
 // 404 Handler
 app.use((req, res) => {
