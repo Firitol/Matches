@@ -123,8 +123,9 @@ const connectDB = async () => {
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION (Neon PostgreSQL)
-// ============================================
+// 📦 SESSION CONFIGURATION 
+const session = require('express-session');
+const PostgreSQLStore = require('connect-pg-simple')(session);
 
 app.use(session({
   store: new PostgreSQLStore({
@@ -140,14 +141,15 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // Vercel uses HTTPS
+    // ✅ Vercel uses HTTPS, but serverless needs this setting
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax'
+    maxAge: 24 * 60 * 60 * 1000,  // 1 day
+    sameSite: 'lax',  // ✅ Critical for cross-origin serverless
+    path: '/'  // ✅ Ensure cookie works on all routes
   },
   name: 'ethiomatch.sid'
 }));
-
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
