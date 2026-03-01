@@ -505,32 +505,54 @@ app.get('/dashboard', async (req, res) => {
     ]);
     
     // 🎨 Render Dashboard with Data
-    res.render('dashboard', {
-      title: 'Dashboard',
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        age: user.age,
-        gender: user.gender,
-        lookingFor: user.lookingFor,
-        location: user.location,
-        bio: user.bio,
-        interests: user.interests,
-        profileImage: user.profileImage,
-        isVerified: user.isVerified,
-        lastActive: user.lastActive,
-        createdAt: user.createdAt
-      },
-      matches,
-      potentialMatches,
-      stats: {
-        matchCount,
-        likeCount,
-        potentialCount: potentialMatches.length
-      },
-      activePage: 'dashboard'
-    });
+res.render('dashboard', {
+  title: 'Dashboard',
+  
+  // 👤 Current User Data (sanitized - no password)
+  user: {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    age: user.age,
+    gender: user.gender,
+    lookingFor: user.lookingFor,
+    location: user.location,
+    bio: user.bio,
+    interests: user.interests,
+    profileImage: user.profileImage,
+    isVerified: user.isVerified,
+    lastActive: user.lastActive,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  },
+  
+  // 💕 Accepted Matches (other user in each match)
+  matches: matches,
+  
+  // 🔍 Potential Matches (people to browse)
+  potentialMatches: potentialMatches,
+  
+  // 📊 Stats for display
+  stats: {
+    matchCount: matchCount,
+    likeCount: likeCount,
+    potentialCount: potentialMatches.length
+  },
+  
+  // 🎯 For highlighting active nav item
+  activePage: 'dashboard',
+  
+  // 🌍 Global helpers (if not already in app.use)
+  formatDate: (date) => new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  }),
+  truncateText: (text, length) => {
+    if (!text) return '';
+    return text.length > length ? text.substring(0, length) + '...' : text;
+  }
+});
     
   } catch (error) {
     // 🚨 Production Error Handling
