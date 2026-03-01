@@ -1,4 +1,12 @@
 // server.js - EthioMatch Production Ready (Vercel + Neon + PostgreSQL)
+if (process.env.NODE_ENV === 'production') {
+  process.on('warning', (warning) => {
+    if (warning.name === 'SecurityWarning' && warning.message.includes('sslmode')) {
+      return; // Ignore this specific warning
+    }
+    console.warn(warning); // Log other warnings
+  });
+}
 require('dotenv').config();
 
 const express = require('express');
