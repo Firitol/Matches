@@ -407,46 +407,141 @@ app.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
-// Dashboard
+// ============================================
+// 📊 DASHBOARD ROUTE - PRODUCTION READY
+// ============================================
+
 app.get('/dashboard', async (req, res) => {
-  if (!req.session.userId) {
-    req.flash('error', 'Please login');
-    return res.redirect('/login');
-  }
-  
   try {
-    const User = require('./models/User');
-    const Match = require('./models/Match');
-    
-    const user = await User.findByPk(req.session.userId);
-    if (!user) {
-      req.session.destroy();
+    // 🔐 Authentication Check
+    if (!req.session.userId) {
+      req.flash('error', 'Please login to continue');
       return res.redirect('/login');
     }
     
-    const potentialMatches = await User.findAll({
-      where: {
-        id: { [Op.ne]: user.id },
-        isActive: true,
-        gender: user.lookingFor
-      },
-      limit: 10
+    const User = require('./models/User');
+    const Match = require('./models/Match');
+    
+    // 👤 Fetch Current User
+    const user = await User.findByPk(req.session.userId, {
+      attributes: {
+        exclude: ['password'] // Never send password to frontend
+      }
     });
     
-    const matchCount = await Match.count({
+    // Handle deleted/deactivated account
+    if (!user || !user.isActive) {
+      req.session.destroy();
+      req.flash('error', 'Account not found or deactivated');
+      return res.redirect('/login');
+    }
+    
+    // 🔄 Update last active timestamp
+    await user.updateLastActive().catch(() => {}); // Non-blocking
+    
+    // 💕 Fetch Accepted Matches
+    const acceptedMatches = await Match.findAll({
       where: {
         [Op.or]: [
           { user1Id: user.id },
           { user2Id: user.id }
         ],
         status: 'accepted'
-      }
+      },
+      include: [
+        {
+          model: User,
+          as: 'user1',
+          attributes: ['id', 'username', 'age', 'profileImage', 'location']
+        },
+        {
+          model: User,
+          as: 'user2',
+          attributes: ['id', 'username', 'age', 'profileImage', 'location']
+        }
+      ],
+      order: [['updatedAt', 'DESC']],
+      limit: 20
     });
     
-    res.render('dashboard', { title: 'Dashboard', user, potentialMatches, matchCount });
+    // Transform matches to show the "other" user
+    const matches = acceptedMatches.map(match => {
+      const isUser1 = match.user1Id === user.id;
+      return isUser1 ? match.user2 : match.user1;
+    }).filter(Boolean); // Remove any nulls
+    
+    // 🔍 Fetch Potential Matches (not yet matched)
+    // Exclude: current user, already matched users, blocked users
+    const matchedUserIds = matches.map(m => m.id);
+    
+    const potentialMatches = await User.findAll({
+      where: {
+        id: {
+          [Op.notIn]: [user.id, ...matchedUserIds]
+        },
+        isActive: true,
+        gender: user.lookingFor,
+        age: { [Op.between]: [18, 100] }
+      },
+      attributes: ['id', 'username', 'age', 'bio', 'location', 'profileImage', 'interests'],
+      limit: 12,
+      order: [['lastActive', 'DESC']]
+    });
+    
+    // 📊 Fetch Stats
+    const [matchCount, likeCount] = await Promise.all([
+      Match.count({
+        where: {
+          [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }],
+          status: 'accepted'
+        }
+      }),
+      Match.count({
+        where: {
+          [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }],
+          status: 'pending'
+        }
+      })
+    ]);
+    
+    // 🎨 Render Dashboard with Data
+    res.render('dashboard', {
+      title: 'Dashboard',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        age: user.age,
+        gender: user.gender,
+        lookingFor: user.lookingFor,
+        location: user.location,
+        bio: user.bio,
+        interests: user.interests,
+        profileImage: user.profileImage,
+        isVerified: user.isVerified,
+        lastActive: user.lastActive,
+        createdAt: user.createdAt
+      },
+      matches,
+      potentialMatches,
+      stats: {
+        matchCount,
+        likeCount,
+        potentialCount: potentialMatches.length
+      },
+      activePage: 'dashboard'
+    });
+    
   } catch (error) {
-    console.error('Dashboard error:', error.message);
-    req.flash('error', 'Failed to load dashboard');
+    // 🚨 Production Error Handling
+    console.error('Dashboard error:', {
+      message: error.message,
+      userId: req.session?.userId,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+    
+    // Don't expose internal errors to users
+    req.flash('error', 'Failed to load dashboard. Please try again.');
     res.redirect('/');
   }
 });
