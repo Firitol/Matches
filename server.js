@@ -201,20 +201,45 @@ app.get('/', (req, res) => {
   }
 });
 
-// Login GET
+// Login GET - SIMPLIFIED
 app.get('/login', (req, res) => {
+  console.log('🔍 GET /login - Rendering login page');
+  console.log('  - Session userId:', req.session.userId);
+  console.log('  - Already logged in:', !!req.session.userId);
+  
   if (req.session.userId) {
-    res.redirect('/dashboard');
-  } else {
-    res.render('login', { title: 'Login' });
+    console.log('  - Redirecting to /dashboard (already logged in)');
+    return res.redirect('/dashboard');
+  }
+  
+  try {
+    res.render('login', { 
+      title: 'Login',
+      error: req.flash('error'),
+      success: req.flash('success')
+    });
+  } catch (error) {
+    console.error('❌ Login page render error:', error.message);
+    res.status(500).send('Error loading login page: ' + error.message);
   }
 });
 
-// Login POST
+// Login POST - SIMPLIFIED
 app.post('/login', async (req, res) => {
+  console.log('🔍 POST /login - Attempting login');
+  console.log('  - Body:', JSON.stringify(req.body));
+  
   try {
     const { username, password } = req.body;
+    
+    if (!username || !password) {
+      req.flash('error', 'Please enter username and password');
+      return res.redirect('/login');
+    }
+    
     const User = require('./models/User');
+    
+    console.log('  - Searching for user:', username);
     const user = await User.findOne({
       where: {
         [Op.or]: [
@@ -223,22 +248,49 @@ app.post('/login', async (req, res) => {
         ]
       }
     });
-    if (!user || !(await user.comparePassword(password))) {
+    
+    console.log('  - User found:', !!user);
+    
+    if (!user) {
       req.flash('error', 'Invalid credentials');
       return res.redirect('/login');
     }
+    
+    console.log('  - Comparing password...');
+    const isMatch = await user.comparePassword(password);
+    console.log('  - Password match:', isMatch);
+    
+    if (!isMatch) {
+      req.flash('error', 'Invalid credentials');
+      return res.redirect('/login');
+    }
+    
     if (!user.isActive) {
       req.flash('error', 'Account deactivated');
       return res.redirect('/login');
     }
+    
+    // Set session
     req.session.userId = user.id;
     req.session.username = user.username;
-    req.session.user = { id: user.id, username: user.username, email: user.email };
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      email: user.email
+    };
+    
+    console.log('✅ Login successful:', user.username);
+    console.log('  - Session userId:', req.session.userId);
+    console.log('  - Redirecting to /dashboard');
+    
     await user.updateLastActive().catch(() => {});
+    
     res.redirect('/dashboard');
+    
   } catch (error) {
-    console.error('Login error:', error.message);
-    req.flash('error', 'Login failed');
+    console.error('❌ Login error:', error.message);
+    console.error('  - Stack:', error.stack);
+    req.flash('error', 'Login failed: ' + error.message);
     res.redirect('/login');
   }
 });
