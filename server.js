@@ -86,6 +86,21 @@ app.use(session({
   },
   name: 'ethiomatch.sid'
 }));
+// 🔍 SESSION DEBUG - Add right after app.use(session(...))
+app.use((req, res, next) => {
+  if (['/login', '/dashboard'].includes(req.path)) {
+    console.log('🔍 SESSION DEBUG:', {
+      path: req.path,
+      method: req.method,
+      sessionId: req.sessionID?.substring(0, 12),
+      userId: req.session?.userId,
+      username: req.session?.username,
+      cookieHeader: req.headers.cookie?.substring(0, 100),
+      sessionKeys: req.session ? Object.keys(req.session) : 'NO SESSION'
+    });
+  }
+  next();
+});
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
