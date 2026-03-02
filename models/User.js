@@ -88,10 +88,10 @@ User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// ✅ Update last active timestamp
+// models/User.js - Add this method
 User.prototype.updateLastActive = async function() {
   this.lastActive = new Date();
-  return this.save().catch(() => {});
+  return this.save().catch(() => {}); // Non-blocking
 };
 
 module.exports = User;
