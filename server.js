@@ -1,7 +1,7 @@
 // server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Fixed Sessions)
-
 require('dotenv').config();
-// 🔍 GLOBAL ERROR CATCHER - Add at top of server.js
+
+// 🔍 GLOBAL ERROR CATCHER
 process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught Exception:', err.message);
   console.error('💥 Stack:', err.stack);
@@ -10,6 +10,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
 });
+
 const express = require('express');
 const session = require('express-session');
 const PostgreSQLStore = require('connect-pg-simple')(session);
@@ -21,6 +22,15 @@ const flash = require('express-flash');
 const { Sequelize, Op } = require('sequelize');
 
 const app = express();
+
+// ============================================
+// 🌍 CONSTANTS (Define BEFORE use)
+// ============================================
+
+const constants = {
+  APP_NAME: 'EthioMatch',
+  APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
+};
 
 // ============================================
 // 🗄️ NEON POSTGRESQL DATABASE CONNECTION
@@ -35,7 +45,7 @@ const connectDB = async () => {
       return null;
     }
     
-    // Clean connection string (remove quotes, whitespace, wrong protocol)
+    // Clean connection string
     let dbUrl = process.env.DATABASE_URL.trim();
     if (dbUrl.startsWith('"') && dbUrl.endsWith('"')) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
@@ -57,7 +67,6 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
     
-    // Sync models (create tables if they don't exist)
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
     
@@ -75,17 +84,14 @@ connectDB();
 // 📦 SESSION CONFIGURATION - VERCEL COMPATIBLE
 // ============================================
 
-// 🔧 Use MemoryStore for preview/testing, PostgreSQLStore for production
 const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_URL?.includes('vercel.app');
 const useMemoryStore = isPreview || process.env.USE_MEMORY_STORE === 'true';
 
 if (useMemoryStore) {
   console.log('⚠️ Using MemoryStore for sessions (preview/testing mode)');
-  console.log('   For production, set USE_MEMORY_STORE=false and use PostgreSQLStore');
 }
 
 app.use(session({
-  // 🔧 Toggle between MemoryStore and PostgreSQLStore
   store: useMemoryStore 
     ? new session.MemoryStore()
     : new PostgreSQLStore({
@@ -96,25 +102,22 @@ app.use(session({
         tableName: 'session',
         createTableIfMissing: true,
         errorLog: console.error.bind(console),
-        pruneSessionInterval: false // Disable auto-cleanup for serverless
+        pruneSessionInterval: false
       }),
-  
   secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    // 🔧 Disable secure for preview/testing (Vercel preview may not have valid SSL)
     secure: process.env.NODE_ENV === 'production' && !isPreview,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 1 day
-    sameSite: 'lax', // Critical for Vercel serverless
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax',
     path: '/'
-    // Do NOT set domain for Vercel preview URLs - let browser handle it
   },
   name: 'ethiomatch.sid'
 }));
 
-// 🔍 Session Debug Middleware (remove in production if desired)
+// 🔍 Session Debug Middleware
 app.use((req, res, next) => {
   const isDebug = process.env.NODE_ENV === 'development' || req.query.debug === 'session';
   if (isDebug && ['/login', '/dashboard', '/register'].includes(req.path)) {
@@ -124,9 +127,7 @@ app.use((req, res, next) => {
       sessionId: req.sessionID?.substring(0, 12),
       userId: req.session?.userId,
       username: req.session?.username,
-      hasCookie: !!req.headers.cookie,
-      isPreview: isPreview,
-      useMemoryStore: useMemoryStore
+      hasCookie: !!req.headers.cookie
     });
   }
   next();
@@ -149,7 +150,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ============================================
-// 🔐 CSRF TOKEN (Simple Implementation)
+// 🔐 CSRF TOKEN
 // ============================================
 
 app.use((req, res, next) => {
@@ -189,24 +190,22 @@ app.use((req, res, next) => {
 app.use(flash());
 
 // ============================================
-// 🌍 GLOBAL VARIABLES FOR VIEWS - UPDATED
+// 🌍 GLOBAL VARIABLES & HELPERS FOR VIEWS ✅ FIXED
+// ============================================
+
 app.use(async (req, res, next) => {
+  // User & flash messages
   res.locals.user = req.session.user || null;
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.warning = req.flash('warning');
   res.locals.info = req.flash('info');
+  
+  // App constants
   res.locals.appName = constants.APP_NAME;
   res.locals.currentYear = new Date().getFullYear();
   res.locals.constants = constants;
-  app.use(async (req, res, next) => {
-  // ... other locals ...
-  res.locals.formatDate = formatDate;
-  res.locals.truncateText = truncateText;
-  res.locals.getAvatarEmoji = getAvatarEmoji;  // ✅ This fixes the error
-  res.locals.isOnline = isOnline;
-  next();
-});
+  
   // ✅ Helper: Format dates
   res.locals.formatDate = (date) => {
     if (!date) return '';
@@ -221,7 +220,7 @@ app.use(async (req, res, next) => {
     return text.length > length ? text.substring(0, length) + '...' : text;
   };
   
-  // ✅ Helper: Get avatar emoji from username (FIXES THE ERROR)
+  // ✅ Helper: Get avatar emoji from username
   res.locals.getAvatarEmoji = (username) => {
     if (!username) return '👤';
     const emojis = ['😀', '😊', '🥰', '😎', '🤩', '🙋', '💁', '👩', '👨', '🧑', '🦁', '🐘', '🦒', '🦓', '🐆'];
@@ -229,7 +228,7 @@ app.use(async (req, res, next) => {
     return emojis[index];
   };
   
-  // ✅ Helper: Check if user is online (last active within 10 minutes)
+  // ✅ Helper: Check if user is online
   res.locals.isOnline = (lastActive) => {
     if (!lastActive) return false;
     const minutesAgo = (Date.now() - new Date(lastActive).getTime()) / (1000 * 60);
@@ -282,12 +281,11 @@ app.get('/login', (req, res) => {
   });
 });
 
-// 🔐 Login POST - FINAL PRODUCTION READY
+// 🔐 Login POST
 app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    // Validate input
     if (!username || !password) {
       req.flash('error', 'Please enter username and password');
       return res.redirect('/login');
@@ -295,7 +293,6 @@ app.post('/login', async (req, res) => {
     
     const User = require('./models/User');
     
-    // Find user (case-insensitive)
     const user = await User.findOne({
       where: {
         [Op.or]: [
@@ -310,7 +307,6 @@ app.post('/login', async (req, res) => {
       return res.redirect('/login');
     }
     
-    // Compare password with bcrypt
     const isMatch = await user.comparePassword(password);
     
     if (!isMatch) {
@@ -318,13 +314,11 @@ app.post('/login', async (req, res) => {
       return res.redirect('/login');
     }
     
-    // Check if account is active
     if (!user.isActive) {
       req.flash('error', 'Account deactivated');
       return res.redirect('/login');
     }
     
-    // ✅ Login successful - Set session BEFORE redirect
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.user = {
@@ -334,7 +328,6 @@ app.post('/login', async (req, res) => {
       profileImage: user.profileImage
     };
     
-    // Update last active (non-blocking)
     await user.updateLastActive().catch(() => {});
     
     res.redirect('/dashboard');
@@ -355,12 +348,11 @@ app.get('/register', (req, res) => {
   }
 });
 
-// 📝 Register POST - PRODUCTION READY
+// 📝 Register POST
 app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
     
-    // Validate required fields
     if (!username || username.trim().length < 3) {
       req.flash('error', 'Username must be at least 3 characters');
       return res.redirect('/register');
@@ -376,7 +368,6 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    // Age validation: strict integer + bounds
     const ageNumber = parseInt(String(age).trim(), 10);
     if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
       req.flash('error', 'You must be 18-100 years old');
@@ -400,7 +391,6 @@ app.post('/register', async (req, res) => {
     
     const User = require('./models/User');
     
-    // Check for existing user (case-insensitive)
     const existing = await User.findOne({
       where: {
         [Op.or]: [
@@ -415,7 +405,6 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    // Create user - PostgreSQL + Sequelize enforce constraints
     const user = await User.create({
       username: username.trim(),
       email: email.toLowerCase(),
@@ -455,10 +444,9 @@ app.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
-// 📊 Dashboard - PRODUCTION READY
+// 📊 Dashboard
 app.get('/dashboard', async (req, res) => {
   try {
-    // 🔐 Authentication Check
     if (!req.session.userId) {
       req.flash('error', 'Please login to continue');
       return res.redirect('/login');
@@ -467,7 +455,6 @@ app.get('/dashboard', async (req, res) => {
     const User = require('./models/User');
     const Match = require('./models/Match');
     
-    // 👤 Fetch Current User (exclude password)
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
@@ -478,10 +465,8 @@ app.get('/dashboard', async (req, res) => {
       return res.redirect('/login');
     }
     
-    // 🔄 Update last active (non-blocking)
     await user.updateLastActive().catch(() => {});
     
-    // 💕 Fetch Accepted Matches
     const acceptedMatches = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }],
@@ -495,12 +480,10 @@ app.get('/dashboard', async (req, res) => {
       limit: 20
     });
     
-    // Transform to show the "other" user in each match
     const matches = acceptedMatches.map(match => {
       return match.user1Id === user.id ? match.user2 : match.user1;
     }).filter(Boolean);
     
-    // 🔍 Fetch Potential Matches (not yet matched)
     const matchedUserIds = matches.map(m => m.id);
     
     const potentialMatches = await User.findAll({
@@ -515,7 +498,6 @@ app.get('/dashboard', async (req, res) => {
       order: [['lastActive', 'DESC']]
     });
     
-    // 📊 Fetch Stats
     const [matchCount, likeCount] = await Promise.all([
       Match.count({
         where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'accepted' }
@@ -525,7 +507,6 @@ app.get('/dashboard', async (req, res) => {
       })
     ]);
     
-    // 🎨 Render Dashboard
     res.render('dashboard', {
       title: 'Dashboard',
       user: {
@@ -556,14 +537,9 @@ app.get('/dashboard', async (req, res) => {
   }
 });
 
-// ============================================
-// 👤 PROFILE ROUTES - PRODUCTION READY
-// ============================================
-
-// Profile GET
+// 👤 Profile GET
 app.get('/profile', async (req, res) => {
   try {
-    // 🔐 Auth check
     if (!req.session.userId) {
       req.flash('error', 'Please login to continue');
       return res.redirect('/login');
@@ -571,7 +547,6 @@ app.get('/profile', async (req, res) => {
     
     const User = require('./models/User');
     
-    // Fetch current user
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
@@ -605,7 +580,7 @@ app.get('/profile', async (req, res) => {
   }
 });
 
-// Profile POST - Update Profile
+// 👤 Profile POST
 app.post('/profile', async (req, res) => {
   try {
     if (!req.session.userId) {
@@ -622,17 +597,10 @@ app.post('/profile', async (req, res) => {
       return res.redirect('/login');
     }
     
-    // Update fields with validation
-    if (bio !== undefined) {
-      user.bio = bio.trim().substring(0, 500); // Max 500 chars
-    }
-    
-    if (location !== undefined) {
-      user.location = location.trim().substring(0, 100); // Max 100 chars
-    }
+    if (bio !== undefined) user.bio = bio.trim().substring(0, 500);
+    if (location !== undefined) user.location = location.trim().substring(0, 100);
     
     if (interests !== undefined) {
-      // Parse comma-separated interests, limit to 20
       user.interests = interests
         .split(',')
         .map(i => i.trim())
@@ -646,7 +614,6 @@ app.post('/profile', async (req, res) => {
     
     await user.save();
     
-    // Update session with new user data
     req.session.user = {
       id: user.id,
       username: user.username,
@@ -671,7 +638,7 @@ app.post('/profile', async (req, res) => {
   }
 });
 
-// Profile Image Upload (Optional - for future)
+// Profile Image Upload
 app.post('/profile/upload-image', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -694,7 +661,6 @@ app.post('/profile/upload-image', async (req, res) => {
     user.profileImage = imageUrl.substring(0, 255);
     await user.save();
     
-    // Update session
     req.session.user.profileImage = user.profileImage;
     
     res.json({ success: true, message: 'Profile image updated', imageUrl: user.profileImage });
@@ -704,12 +670,14 @@ app.post('/profile/upload-image', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to upload image' });
   }
 });
+
 // 💕 Matches
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
     const Match = require('./models/Match');
     const User = require('./models/User');
+    
     const matches = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
@@ -720,9 +688,11 @@ app.get('/matches', async (req, res) => {
         { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage'] }
       ]
     });
+    
     const matchList = matches.map(m => {
       return m.user1Id === req.session.userId ? m.user2 : m.user1;
     });
+    
     res.render('matches', { title: 'My Matches', matches: matchList });
   } catch (error) {
     console.error('Matches error:', error.message);
@@ -730,7 +700,7 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// ❤️ Like User (API)
+// ❤️ Like User
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -738,6 +708,7 @@ app.post('/like/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const Match = require('./models/Match');
+    
     let match = await Match.findOne({
       where: {
         [Op.or]: [
@@ -746,6 +717,7 @@ app.post('/like/:userId', async (req, res) => {
         ]
       }
     });
+    
     if (!match) {
       match = await Match.create({
         user1Id: req.session.userId,
@@ -759,6 +731,7 @@ app.post('/like/:userId', async (req, res) => {
         await match.save();
       }
     }
+    
     const isMatch = match.likedBy.length >= 2;
     res.json({ success: true, isMatch, message: isMatch ? "It's a match!" : "Like sent!" });
   } catch (error) {
@@ -767,49 +740,29 @@ app.post('/like/:userId', async (req, res) => {
   }
 });
 
-// ============================================
-// 💬 MESSAGING ROUTES - PRODUCTION READY
-// ============================================
-
-// Messages Page - List conversations
+// 💬 Messages List
 app.get('/messages', async (req, res) => {
   try {
-    if (!req.session.userId) {
-      return res.redirect('/login');
-    }
+    if (!req.session.userId) return res.redirect('/login');
     
     const Match = require('./models/Match');
     const User = require('./models/User');
     
-    // Get all accepted matches for current user
     const matches = await Match.findAll({
       where: {
-        [Op.or]: [
-          { user1Id: req.session.userId },
-          { user2Id: req.session.userId }
-        ],
+        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
         status: 'accepted'
       },
       include: [
-        {
-          model: User,
-          as: 'user1',
-          attributes: ['id', 'username', 'profileImage', 'lastActive']
-        },
-        {
-          model: User,
-          as: 'user2',
-          attributes: ['id', 'username', 'profileImage', 'lastActive']
-        }
+        { model: User, as: 'user1', attributes: ['id', 'username', 'profileImage', 'lastActive'] },
+        { model: User, as: 'user2', attributes: ['id', 'username', 'profileImage', 'lastActive'] }
       ],
       order: [['updatedAt', 'DESC']]
     });
     
-    // Transform to show the "other" user + match info
     const conversations = matches.map(match => {
       const isUser1 = match.user1Id === req.session.userId;
       const otherUser = isUser1 ? match.user2 : match.user1;
-      
       return {
         matchId: match.id,
         user: {
@@ -818,7 +771,7 @@ app.get('/messages', async (req, res) => {
           profileImage: otherUser.profileImage,
           lastActive: otherUser.lastActive
         },
-        lastMessage: null, // Add message logic later
+        lastMessage: null,
         updatedAt: match.updatedAt
       };
     });
@@ -835,25 +788,19 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// Chat Room - Individual conversation
+// 💬 Chat Room
 app.get('/messages/:matchId', async (req, res) => {
   try {
-    if (!req.session.userId) {
-      return res.redirect('/login');
-    }
+    if (!req.session.userId) return res.redirect('/login');
     
     const { matchId } = req.params;
     const Match = require('./models/Match');
     const User = require('./models/User');
     
-    // Verify match belongs to current user and is accepted
     const match = await Match.findOne({
       where: {
         id: matchId,
-        [Op.or]: [
-          { user1Id: req.session.userId },
-          { user2Id: req.session.userId }
-        ],
+        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
         status: 'accepted'
       },
       include: [
@@ -867,11 +814,7 @@ app.get('/messages/:matchId', async (req, res) => {
       return res.redirect('/messages');
     }
     
-    // Get the other user
     const otherUser = match.user1Id === req.session.userId ? match.user2 : match.user1;
-    
-    // 📝 Fetch messages (placeholder - add Message model later)
-    const messages = []; // TODO: Implement Message model
     
     res.render('chat', {
       title: `Chat with ${otherUser.username}`,
@@ -883,7 +826,7 @@ app.get('/messages/:matchId', async (req, res) => {
           profileImage: otherUser.profileImage
         }
       },
-      messages,
+      messages: [],
       currentUser: {
         id: req.session.userId,
         username: req.session.username
@@ -896,7 +839,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// Send Message API (placeholder for now)
+// 💬 Send Message
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -912,14 +855,10 @@ app.post('/messages/:matchId/send', async (req, res) => {
     
     const Match = require('./models/Match');
     
-    // Verify match exists and is accepted
     const match = await Match.findOne({
       where: {
         id: matchId,
-        [Op.or]: [
-          { user1Id: req.session.userId },
-          { user2Id: req.session.userId }
-        ],
+        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
         status: 'accepted'
       }
     });
@@ -928,16 +867,13 @@ app.post('/messages/:matchId/send', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
     
-    // TODO: Create Message model and save message here
-    // For now, just acknowledge receipt
     console.log(`📝 Message from ${req.session.username} to match ${matchId}:`, content.trim());
     
     res.json({
       success: true,
       message: 'Message sent!',
-      // TODO: Return the saved message object
       data: {
-        id: Date.now().toString(), // Temporary ID
+        id: Date.now().toString(),
         content: content.trim(),
         senderId: req.session.userId,
         createdAt: new Date().toISOString()
@@ -949,6 +885,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to send message' });
   }
 });
+
 // ❌ 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
@@ -982,7 +919,7 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 🚀 START SERVER (Vercel Compatible)
+// 🚀 START SERVER
 // ============================================
 
 const PORT = process.env.PORT || 3000;
@@ -993,7 +930,7 @@ const server = app.listen(PORT, () => {
   console.log(`🔧 Session Store: ${useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'}`);
 });
 
-// Graceful shutdown for Vercel serverless
+// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
