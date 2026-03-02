@@ -180,14 +180,7 @@ app.use((req, res, next) => {
 app.use(flash());
 
 // ============================================
-// 🌍 GLOBAL VARIABLES FOR VIEWS
-// ============================================
-
-const constants = {
-  APP_NAME: 'EthioMatch',
-  APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
-};
-
+// 🌍 GLOBAL VARIABLES FOR VIEWS - UPDATED
 app.use(async (req, res, next) => {
   res.locals.user = req.session.user || null;
   res.locals.success = req.flash('success');
@@ -197,13 +190,36 @@ app.use(async (req, res, next) => {
   res.locals.appName = constants.APP_NAME;
   res.locals.currentYear = new Date().getFullYear();
   res.locals.constants = constants;
-  res.locals.formatDate = (date) => new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'short', day: 'numeric'
-  });
+  
+  // ✅ Helper: Format dates
+  res.locals.formatDate = (date) => {
+    if (!date) return '';
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric'
+    });
+  };
+  
+  // ✅ Helper: Truncate text
   res.locals.truncateText = (text, length) => {
     if (!text) return '';
     return text.length > length ? text.substring(0, length) + '...' : text;
   };
+  
+  // ✅ Helper: Get avatar emoji from username (FIXES THE ERROR)
+  res.locals.getAvatarEmoji = (username) => {
+    if (!username) return '👤';
+    const emojis = ['😀', '😊', '🥰', '😎', '🤩', '🙋', '💁', '👩', '👨', '🧑', '🦁', '🐘', '🦒', '🦓', '🐆'];
+    const index = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % emojis.length;
+    return emojis[index];
+  };
+  
+  // ✅ Helper: Check if user is online (last active within 10 minutes)
+  res.locals.isOnline = (lastActive) => {
+    if (!lastActive) return false;
+    const minutesAgo = (Date.now() - new Date(lastActive).getTime()) / (1000 * 60);
+    return minutesAgo < 10;
+  };
+  
   next();
 });
 
