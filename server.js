@@ -1,4 +1,4 @@
-// server.js - EthioMatch Production Ready (Login + Session Fixed)
+// server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Fixed Sessions)
 require('dotenv').config();
 
 const express = require('express');
@@ -22,11 +22,11 @@ let sequelize;
 const connectDB = async () => {
   try {
     if (!process.env.DATABASE_URL) {
-      console.error('❌ DATABASE_URL not set');
+      console.error('❌ DATABASE_URL not set in environment variables');
       return null;
     }
     
-    // Clean connection string
+    // Clean connection string (remove quotes, whitespace, wrong protocol)
     let dbUrl = process.env.DATABASE_URL.trim();
     if (dbUrl.startsWith('"') && dbUrl.endsWith('"')) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
@@ -47,8 +47,11 @@ const connectDB = async () => {
     
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
+    
+    // Sync models (create tables if they don't exist)
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
+    
     return sequelize;
   } catch (error) {
     console.error('❌ Neon Connection Error:', error.message);
@@ -56,37 +59,70 @@ const connectDB = async () => {
   }
 };
 
+// Initialize database on startup
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION - PRODUCTION READY (PostgreSQL)
-const PostgreSQLStore = require('connect-pg-simple')(session);
+// 📦 SESSION CONFIGURATION - VERCEL COMPATIBLE
+// ============================================
+
+// 🔧 Use MemoryStore for preview/testing, PostgreSQLStore for production
+const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_URL?.includes('vercel.app');
+const useMemoryStore = isPreview || process.env.USE_MEMORY_STORE === 'true';
+
+if (useMemoryStore) {
+  console.log('⚠️ Using MemoryStore for sessions (preview/testing mode)');
+  console.log('   For production, set USE_MEMORY_STORE=false and use PostgreSQLStore');
+}
 
 app.use(session({
-  store: new PostgreSQLStore({
-    conObject: {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    },
-    tableName: 'session',
-    createTableIfMissing: true,
-    errorLog: console.error.bind(console),
-    // 🔧 Add these for Vercel compatibility:
-    pruneSessionInterval: false  // Disable auto-cleanup for serverless
-  }),
-  secret: process.env.SESSION_SECRET,  // Must be 64 chars, stable across deploys
+  // 🔧 Toggle between MemoryStore and PostgreSQLStore
+  store: useMemoryStore 
+    ? new session.MemoryStore()
+    : new PostgreSQLStore({
+        conObject: {
+          connectionString: process.env.DATABASE_URL,
+          ssl: { rejectUnauthorized: false }
+        },
+        tableName: 'session',
+        createTableIfMissing: true,
+        errorLog: console.error.bind(console),
+        pruneSessionInterval: false // Disable auto-cleanup for serverless
+      }),
+  
+  secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    // 🔧 Disable secure for preview/testing (Vercel preview may not have valid SSL)
+    secure: process.env.NODE_ENV === 'production' && !isPreview,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
+    sameSite: 'lax', // Critical for Vercel serverless
     path: '/'
-    // Do NOT set domain for Vercel preview URLs
+    // Do NOT set domain for Vercel preview URLs - let browser handle it
   },
   name: 'ethiomatch.sid'
 }));
+
+// 🔍 Session Debug Middleware (remove in production if desired)
+app.use((req, res, next) => {
+  const isDebug = process.env.NODE_ENV === 'development' || req.query.debug === 'session';
+  if (isDebug && ['/login', '/dashboard', '/register'].includes(req.path)) {
+    console.log('🔍 Session Debug:', {
+      path: req.path,
+      method: req.method,
+      sessionId: req.sessionID?.substring(0, 12),
+      userId: req.session?.userId,
+      username: req.session?.username,
+      hasCookie: !!req.headers.cookie,
+      isPreview: isPreview,
+      useMemoryStore: useMemoryStore
+    });
+  }
+  next();
+});
+
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
@@ -202,20 +238,11 @@ app.get('/', (req, res) => {
   }
 });
 
-// 🔐 Login GET - FIXED
+// 🔐 Login GET
 app.get('/login', (req, res) => {
-  console.log('🔍 GET /login - Session check:', {
-    userId: req.session.userId,
-    hasSession: !!req.session,
-    sessionId: req.sessionID?.substring(0, 12)
-  });
-  
-  // If already logged in, redirect to dashboard
   if (req.session.userId) {
-    console.log('✅ User already logged in, redirecting to /dashboard');
     return res.redirect('/dashboard');
   }
-  
   res.render('login', { 
     title: 'Login',
     error: req.flash('error'),
@@ -223,18 +250,13 @@ app.get('/login', (req, res) => {
   });
 });
 
-// 🔐 Login POST - FIXED & PRODUCTION READY
+// 🔐 Login POST - FINAL PRODUCTION READY
 app.post('/login', async (req, res) => {
-  console.log('🔍 POST /login - Attempting login');
-  console.log('  - Body username:', req.body.username);
-  console.log('  - Session before:', { id: req.sessionID?.substring(0, 12), userId: req.session.userId });
-  
   try {
     const { username, password } = req.body;
     
     // Validate input
     if (!username || !password) {
-      console.log('❌ Missing username or password');
       req.flash('error', 'Please enter username and password');
       return res.redirect('/login');
     }
@@ -242,7 +264,6 @@ app.post('/login', async (req, res) => {
     const User = require('./models/User');
     
     // Find user (case-insensitive)
-    console.log('  - Searching for user:', username);
     const user = await User.findOne({
       where: {
         [Op.or]: [
@@ -252,35 +273,26 @@ app.post('/login', async (req, res) => {
       }
     });
     
-    console.log('  - User found:', !!user);
-    
     if (!user) {
-      console.log('❌ User not found');
       req.flash('error', 'Invalid credentials');
       return res.redirect('/login');
     }
     
     // Compare password with bcrypt
-    console.log('  - Comparing password...');
     const isMatch = await user.comparePassword(password);
-    console.log('  - Password match:', isMatch);
     
     if (!isMatch) {
-      console.log('❌ Password mismatch');
       req.flash('error', 'Invalid credentials');
       return res.redirect('/login');
     }
     
     // Check if account is active
     if (!user.isActive) {
-      console.log('❌ Account deactivated');
       req.flash('error', 'Account deactivated');
       return res.redirect('/login');
     }
     
-    // ✅ Login successful - Set session
-    console.log('✅ Login successful:', user.username);
-    
+    // ✅ Login successful - Set session BEFORE redirect
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.user = {
@@ -290,20 +302,13 @@ app.post('/login', async (req, res) => {
       profileImage: user.profileImage
     };
     
-    console.log('  - Session after:', { 
-      userId: req.session.userId, 
-      username: req.session.username 
-    });
-    
-    // Update last active timestamp (non-blocking)
+    // Update last active (non-blocking)
     await user.updateLastActive().catch(() => {});
     
-    console.log('  - Redirecting to /dashboard');
     res.redirect('/dashboard');
     
   } catch (error) {
-    console.error('❌ Login error:', error.message);
-    console.error('  - Stack:', error.stack);
+    console.error('Login error:', error.message);
     req.flash('error', 'Login failed: ' + error.message);
     res.redirect('/login');
   }
@@ -389,8 +394,6 @@ app.post('/register', async (req, res) => {
       location: location || 'Ethiopia'
     });
     
-    console.log('✅ User created:', user.username, 'Age:', user.age);
-    
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
     
@@ -414,7 +417,6 @@ app.post('/register', async (req, res) => {
 
 // 🚪 Logout
 app.get('/logout', (req, res) => {
-  console.log('🔍 Logout - Destroying session for user:', req.session.username);
   req.session.destroy((err) => {
     if (err) console.error('Session destroy error:', err);
   });
@@ -423,16 +425,9 @@ app.get('/logout', (req, res) => {
 
 // 📊 Dashboard - PRODUCTION READY
 app.get('/dashboard', async (req, res) => {
-  console.log('🔍 GET /dashboard - Session check:', {
-    userId: req.session.userId,
-    username: req.session.username,
-    hasSession: !!req.session
-  });
-  
   try {
     // 🔐 Authentication Check
     if (!req.session.userId) {
-      console.log('❌ No session userId - redirecting to login');
       req.flash('error', 'Please login to continue');
       return res.redirect('/login');
     }
@@ -445,10 +440,7 @@ app.get('/dashboard', async (req, res) => {
       attributes: { exclude: ['password'] }
     });
     
-    console.log('  - User fetched:', !!user, 'isActive:', user?.isActive);
-    
     if (!user || !user.isActive) {
-      console.log('❌ User not found or inactive - destroying session');
       req.session.destroy();
       req.flash('error', 'Account not found or deactivated');
       return res.redirect('/login');
@@ -501,8 +493,6 @@ app.get('/dashboard', async (req, res) => {
       })
     ]);
     
-    console.log('✅ Dashboard rendered for:', user.username);
-    
     // 🎨 Render Dashboard
     res.render('dashboard', {
       title: 'Dashboard',
@@ -528,7 +518,7 @@ app.get('/dashboard', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Dashboard error:', error.message);
+    console.error('Dashboard error:', error.message);
     req.flash('error', 'Failed to load dashboard');
     res.redirect('/');
   }
@@ -707,6 +697,7 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   console.log(`🚀 EthioMatch running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔧 Session Store: ${useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'}`);
 });
 
 // Graceful shutdown for Vercel serverless
