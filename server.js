@@ -1,6 +1,13 @@
 // server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Fixed Sessions)
+// 🔍 GLOBAL ERROR CATCHER - Add at top of server.js
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception:', err.message);
+  console.error('💥 Stack:', err.stack);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+});
 require('dotenv').config();
-onst { formatDate, truncateText, getAvatarEmoji, isOnline } = require('./utils/helpers');
 const express = require('express');
 const session = require('express-session');
 const PostgreSQLStore = require('connect-pg-simple')(session);
