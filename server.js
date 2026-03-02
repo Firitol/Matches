@@ -88,7 +88,7 @@ app.use(session({
     sameSite: 'lax',
     path: '/',
     // ✅ Critical: Allow cookies on Vercel preview domains
-    domain: process.env.VERCEL_URL 
+    domain: process.env.VERCEL_URL
       ? '.' + process.env.VERCEL_URL.replace(/^https?:\/\//, '') 
       : undefined
   },
