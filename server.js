@@ -59,48 +59,34 @@ const connectDB = async () => {
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION - TEMPORARY IN-MEMORY FOR TESTING
-// Replace the entire app.use(session({...})) block with this:
-
-const session = require('express-session');
-
-// 🔧 TEMPORARY: Use MemoryStore for testing on Vercel Preview
-// ⚠️ NOTE: MemoryStore loses sessions on restart - use PostgreSQLStore for production!
-const MemoryStore = require('express-session').MemoryStore;
+// 📦 SESSION CONFIGURATION - PRODUCTION READY (PostgreSQL)
+const PostgreSQLStore = require('connect-pg-simple')(session);
 
 app.use(session({
-  // 🔧 TEMPORARY: MemoryStore instead of PostgreSQLStore
-  store: new MemoryStore(),
-  
-  secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
+  store: new PostgreSQLStore({
+    conObject: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    },
+    tableName: 'session',
+    createTableIfMissing: true,
+    errorLog: console.error.bind(console),
+    // 🔧 Add these for Vercel compatibility:
+    pruneSessionInterval: false  // Disable auto-cleanup for serverless
+  }),
+  secret: process.env.SESSION_SECRET,  // Must be 64 chars, stable across deploys
   resave: false,
   saveUninitialized: false,
   cookie: {
-    // 🔧 TEMPORARY: Disable secure for preview testing
-    secure: false,  // ← Changed from: process.env.NODE_ENV === 'production'
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
     path: '/'
-    // 🔧 TEMPORARY: No domain setting for preview URLs
+    // Do NOT set domain for Vercel preview URLs
   },
   name: 'ethiomatch.sid'
 }));
-// 🔍 SESSION DEBUG - Add right after app.use(session(...))
-app.use((req, res, next) => {
-  if (['/login', '/dashboard'].includes(req.path)) {
-    console.log('🔍 SESSION DEBUG:', {
-      path: req.path,
-      method: req.method,
-      sessionId: req.sessionID?.substring(0, 12),
-      userId: req.session?.userId,
-      username: req.session?.username,
-      cookieHeader: req.headers.cookie?.substring(0, 100),
-      sessionKeys: req.session ? Object.keys(req.session) : 'NO SESSION'
-    });
-  }
-  next();
-});
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
