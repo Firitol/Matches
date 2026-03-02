@@ -9,9 +9,11 @@
     
     <div style="width:40px;height:40px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);margin-right:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0">
       <% if (match.otherUser.profileImage && match.otherUser.profileImage.startsWith('http')) { %>
-        <img src="<%= match.otherUser.profileImage %>" alt="<%= match.otherUser.username %>" style="width:100%;height:100%;object-fit:cover">
+        <img src="<%= match.otherUser.profileImage %>" alt="<%= match.otherUser.username %>" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=\\'font-size:1.25rem;color:white\\'>👤</span>'">
       <% } else { %>
-        <span style="font-size:1.25rem;color:white"><%= getAvatarEmoji ? getAvatarEmoji(match.otherUser.username) : '👤' %></span>
+        <span style="font-size:1.25rem;color:white">
+          <%= typeof getAvatarEmoji === 'function' ? getAvatarEmoji(match.otherUser.username) : '👤' %>
+        </span>
       <% } %>
     </div>
     
@@ -28,9 +30,9 @@
       <% messages.forEach(msg => { %>
         <div style="display:flex;<%= msg.senderId === currentUser.id ? 'justify-content:flex-end' : 'justify-content:flex-start' %>">
           <div style="max-width:70%;padding:0.75rem 1rem;border-radius:18px;<%= msg.senderId === currentUser.id ? 'background:#26EAED;color:#1A1A2E' : 'background:#fff;color:#1A1A2E;box-shadow:0 1px 3px rgba(0,0,0,0.1)' %>">
-            <p style="margin:0"><%= msg.content %></p>
+            <p style="margin:0"><%= typeof truncateText === 'function' ? truncateText(msg.content, 500) : msg.content %></p>
             <small style="display:block;margin-top:0.25rem;opacity:0.7;font-size:0.75rem">
-              <%= formatDate ? formatDate(msg.createdAt) : '' %>
+              <%= typeof formatDate === 'function' ? formatDate(msg.createdAt) : '' %>
             </small>
           </div>
         </div>
@@ -67,68 +69,74 @@ const messageInput = document.getElementById('messageInput');
 
 // Auto-scroll to bottom
 function scrollToBottom() {
-  messagesList.scrollTop = messagesList.scrollHeight;
+  if (messagesList) messagesList.scrollTop = messagesList.scrollHeight;
 }
 scrollToBottom();
 
 // Handle form submit
-messageForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  const content = messageInput.value.trim();
-  if (!content) return;
-  
-  // Disable input while sending
-  messageInput.disabled = true;
-  messageForm.querySelector('button').disabled = true;
-  
-  try {
-    const response = await fetch(`/messages/${matchId}/send`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': '<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>'
-      },
-      body: JSON.stringify({ content })
-    });
+if (messageForm) {
+  messageForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
     
-    const data = await response.json();
+    const content = messageInput.value.trim();
+    if (!content) return;
     
-    if (data.success) {
-      // Add message to UI
-      const msgDiv = document.createElement('div');
-      msgDiv.style.cssText = 'display:flex;justify-content:flex-end';
-      msgDiv.innerHTML = `
-        <div style="max-width:70%;padding:0.75rem 1rem;border-radius:18px;background:#26EAED;color:#1A1A2E">
-          <p style="margin:0">${content}</p>
-          <small style="display:block;margin-top:0.25rem;opacity:0.7;font-size:0.75rem">Just now</small>
-        </div>
-      `;
-      messagesList.appendChild(msgDiv);
-      scrollToBottom();
+    // Disable input while sending
+    messageInput.disabled = true;
+    const sendBtn = messageForm.querySelector('button');
+    if (sendBtn) sendBtn.disabled = true;
+    
+    try {
+      const response = await fetch('/messages/' + matchId + '/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ content })
+      });
       
-      // Clear input
-      messageInput.value = '';
-    } else {
-      alert('Failed to send: ' + data.message);
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add message to UI
+        const msgDiv = document.createElement('div');
+        msgDiv.style.cssText = 'display:flex;justify-content:flex-end';
+        msgDiv.innerHTML = `
+          <div style="max-width:70%;padding:0.75rem 1rem;border-radius:18px;background:#26EAED;color:#1A1A2E">
+            <p style="margin:0">${content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+            <small style="display:block;margin-top:0.25rem;opacity:0.7;font-size:0.75rem">Just now</small>
+          </div>
+        `;
+        if (messagesList) {
+          messagesList.appendChild(msgDiv);
+          scrollToBottom();
+        }
+        
+        // Clear input
+        messageInput.value = '';
+      } else {
+        alert('Failed to send: ' + (data.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Send error:', error);
+      alert('Failed to send message. Please try again.');
+    } finally {
+      messageInput.disabled = false;
+      if (sendBtn) sendBtn.disabled = false;
+      messageInput.focus();
     }
-  } catch (error) {
-    console.error('Send error:', error);
-    alert('Failed to send message');
-  } finally {
-    messageInput.disabled = false;
-    messageForm.querySelector('button').disabled = false;
-    messageInput.focus();
-  }
-});
+  });
+}
 
 // Allow Enter key to send
-messageInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    messageForm.requestSubmit();
-  }
-});
+if (messageInput) {
+  messageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (messageForm) messageForm.requestSubmit();
+    }
+  });
+}
 </script>
 
 <%- include('partials/footer') %>
