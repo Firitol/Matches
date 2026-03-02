@@ -1,0 +1,100 @@
+<!-- views/pending-likes.ejs -->
+<%- include('partials/header') %>
+
+<div class="pending-likes-container" style="max-width:700px;margin:2rem auto;padding:0 1rem">
+  
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem">
+    <h1 style="margin:0;color:#1A1A2E">💕 Pending Likes</h1>
+    <a href="/dashboard" style="color:#666;text-decoration:none">← Back</a>
+  </div>
+  
+  <% if (pendingLikes && pendingLikes.length > 0) { %>
+    <p style="color:#666;margin-bottom:1.5rem">People who liked you - accept to start chatting!</p>
+    
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <% pendingLikes.forEach(like => { %>
+        <div style="background:#fff;padding:1rem;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);display:flex;align-items:center;gap:1rem">
+          
+          <!-- Avatar -->
+          <div style="width:60px;height:60px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <% if (like.user.profileImage?.startsWith('http')) { %>
+              <img src="<%= like.user.profileImage %>" alt="<%= like.user.username %>" style="width:100%;height:100%;object-fit:cover">
+            <% } else { %>
+              <span style="font-size:1.5rem;color:white"><%= typeof getAvatarEmoji === 'function' ? getAvatarEmoji(like.user.username) : '👤' %></span>
+            <% } %>
+          </div>
+          
+          <!-- Info -->
+          <div style="flex:1">
+            <h3 style="margin:0"><%= like.user.username %>, <%= like.user.age %></h3>
+            <p style="margin:0.25rem 0 0 0;color:#666;font-size:0.9rem"><%= typeof truncateText === 'function' ? truncateText(like.user.bio, 80) : '' %></p>
+            <small style="color:#999">Liked you <%= typeof formatDate === 'function' ? formatDate(like.createdAt) : '' %></small>
+          </div>
+          
+          <!-- Actions -->
+          <div style="display:flex;gap:0.5rem">
+            <button onclick="acceptLike('<%= like.matchId %>')" style="padding:0.5rem 1rem;background:#22c55e;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer">✅ Accept</button>
+            <button onclick="rejectLike('<%= like.matchId %>')" style="padding:0.5rem 1rem;background:#ef4444;color:white;border:none;border-radius:6px;font-weight:600;cursor:pointer">❌ Pass</button>
+          </div>
+          
+        </div>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <div style="text-align:center;padding:3rem;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)">
+      <div style="font-size:3rem;margin-bottom:1rem">💕</div>
+      <h3 style="margin:0 0 0.5rem 0;color:#1A1A2E">No pending likes</h3>
+      <p style="color:#666">Keep browsing profiles to get noticed!</p>
+      <a href="/dashboard" style="display:inline-block;margin-top:1rem;padding:0.75rem 1.5rem;background:#26EAED;color:#1A1A2E;border-radius:6px;text-decoration:none;font-weight:600">
+        Browse Profiles
+      </a>
+    </div>
+  <% } %>
+  
+</div>
+
+<script>
+async function acceptLike(matchId) {
+  try {
+    const response = await fetch('/likes/' + matchId + '/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert('🎉 Match accepted! Redirecting to chat...');
+      window.location.href = '/messages/' + data.matchId;
+    } else {
+      alert('Failed: ' + data.message);
+    }
+  } catch (error) {
+    console.error('Accept error:', error);
+    alert('Failed to accept like');
+  }
+}
+
+async function rejectLike(matchId) {
+  if (!confirm('Reject this like?')) return;
+  
+  try {
+    const response = await fetch('/likes/' + matchId + '/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await response.json();
+    
+    if (data.success) {
+      alert('Like rejected');
+      location.reload();
+    } else {
+      alert('Failed: ' + data.message);
+    }
+  } catch (error) {
+    console.error('Reject error:', error);
+    alert('Failed to reject like');
+  }
+}
+</script>
+
+<%- include('partials/footer') %>
