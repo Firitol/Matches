@@ -13,7 +13,7 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(30),
     allowNull: false,
     unique: true,
-    validate: { len: [3, 30] }
+    validate: { len: [3, 30], isAlphanumeric: true }
   },
   email: {
     type: DataTypes.STRING,
@@ -26,15 +26,11 @@ const User = sequelize.define('User', {
     allowNull: false,
     validate: { len: [8, 100] }
   },
- age: {
-  type: DataTypes.INTEGER,  
-  allowNull: false,
-  validate: {
-    isInt: true,            
-    min: 18,                
-    max: 100                
-  }
-},
+  age: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    validate: { isInt: true, min: 18, max: 100 }
+  },
   gender: {
     type: DataTypes.ENUM('Male', 'Female', 'Other'),
     allowNull: false
@@ -74,23 +70,28 @@ const User = sequelize.define('User', {
 }, {
   tableName: 'users',
   timestamps: true,
+  // ✅ Hash password BEFORE saving to database
   hooks: {
     beforeSave: async (user) => {
       if (user.changed('password')) {
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(user.password, salt);
+        console.log('🔐 Password hashed for user:', user.username);
       }
     }
   }
 });
 
+// ✅ Instance method to compare password
 User.prototype.comparePassword = async function(candidatePassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+// ✅ Update last active timestamp
 User.prototype.updateLastActive = async function() {
   this.lastActive = new Date();
-  return this.save();
+  return this.save().catch(() => {});
 };
 
 module.exports = User;
