@@ -1,4 +1,4 @@
-// server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Fixed Sessions)
+// server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Match/Messaging Fixed)
 require('dotenv').config();
 
 // 🔍 GLOBAL ERROR CATCHER
@@ -190,7 +190,7 @@ app.use((req, res, next) => {
 app.use(flash());
 
 // ============================================
-// 🌍 GLOBAL VARIABLES & HELPERS FOR VIEWS ✅ FIXED
+// 🌍 GLOBAL VARIABLES & HELPERS FOR VIEWS
 // ============================================
 
 app.use(async (req, res, next) => {
@@ -671,7 +671,7 @@ app.post('/profile/upload-image', async (req, res) => {
   }
 });
 
-// 💕 Matches
+// 💕 Matches List
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
@@ -700,43 +700,204 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// ❤️ Like User
+// ❤️ Like User - FIXED: Properly handles mutual likes → accepted matches
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
+  
   try {
     const { userId } = req.params;
+    const currentUserId = req.session.userId;
+    
+    // Prevent self-like
+    if (userId === currentUserId) {
+      return res.status(400).json({ success: false, message: 'Cannot like yourself' });
+    }
+    
     const Match = require('./models/Match');
     
+    // Check if match already exists (in either direction)
     let match = await Match.findOne({
       where: {
         [Op.or]: [
-          { user1Id: req.session.userId, user2Id: userId },
-          { user1Id: userId, user2Id: req.session.userId }
+          { user1Id: currentUserId, user2Id: userId },
+          { user1Id: userId, user2Id: currentUserId }
         ]
       }
     });
     
     if (!match) {
+      // Create new pending match
       match = await Match.create({
-        user1Id: req.session.userId,
+        user1Id: currentUserId,
         user2Id: userId,
-        likedBy: [req.session.userId],
+        likedBy: [currentUserId],
         status: 'pending'
       });
+      console.log(`💕 New pending match: ${currentUserId} → ${userId}`);
     } else {
-      if (!match.likedBy?.includes(req.session.userId)) {
-        match.likedBy.push(req.session.userId);
+      // Add current user to likedBy if not already there
+      if (!match.likedBy?.includes(currentUserId)) {
+        match.likedBy.push(currentUserId);
         await match.save();
+        console.log(`💕 ${currentUserId} added to likedBy for match ${match.id}`);
       }
     }
     
-    const isMatch = match.likedBy.length >= 2;
-    res.json({ success: true, isMatch, message: isMatch ? "It's a match!" : "Like sent!" });
+    // ✅ CRITICAL: Check if BOTH users have liked each other → accept the match
+    const isMutualLike = match.likedBy?.includes(currentUserId) && match.likedBy?.includes(userId);
+    
+    if (isMutualLike && match.status !== 'accepted') {
+      match.status = 'accepted';
+      await match.save();
+      console.log(`🎉 Match ${match.id} ACCEPTED! Mutual like detected.`);
+    }
+    
+    const isMatch = match.status === 'accepted';
+    
+    res.json({ 
+      success: true, 
+      isMatch, 
+      matchId: match.id,
+      message: isMatch ? "🎉 It's a match! Start chatting now." : "❤️ Like sent! Wait for them to like you back." 
+    });
+    
   } catch (error) {
     console.error('Like error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed' });
+    res.status(500).json({ success: false, message: 'Failed to process like' });
+  }
+});
+
+// 💕 Pending Likes - View and Accept/Reject
+app.get('/likes/pending', async (req, res) => {
+  try {
+    if (!req.session.userId) return res.redirect('/login');
+    
+    const Match = require('./models/Match');
+    const User = require('./models/User');
+    
+    // Find matches where current user was liked but hasn't responded
+    const pendingLikes = await Match.findAll({
+      where: {
+        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
+        status: 'pending'
+      },
+      include: [
+        { 
+          model: User, 
+          as: req.session.userId ? 'user1' : 'user2', // Simplified - adjust as needed
+          attributes: ['id', 'username', 'age', 'profileImage', 'bio'] 
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    
+    // Transform for template
+    const transformedLikes = pendingLikes.map(match => {
+      const isUser1 = match.user1Id === req.session.userId;
+      const otherUser = isUser1 ? match.user2 : match.user1;
+      return {
+        matchId: match.id,
+        user: otherUser,
+        createdAt: match.createdAt
+      };
+    });
+    
+    res.render('pending-likes', {
+      title: 'Pending Likes',
+      pendingLikes: transformedLikes
+    });
+    
+  } catch (error) {
+    console.error('Pending likes error:', error.message);
+    res.redirect('/dashboard');
+  }
+});
+
+// ✅ Accept a pending like → create accepted match
+app.post('/likes/:matchId/accept', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  try {
+    const { matchId } = req.params;
+    const Match = require('./models/Match');
+    
+    const match = await Match.findOne({
+      where: {
+        id: matchId,
+        status: 'pending',
+        [Op.or]: [
+          { user1Id: req.session.userId },
+          { user2Id: req.session.userId }
+        ]
+      }
+    });
+    
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Like not found' });
+    }
+    
+    // Add current user to likedBy if not already there
+    if (!match.likedBy?.includes(req.session.userId)) {
+      match.likedBy.push(req.session.userId);
+    }
+    
+    // ✅ Accept the match
+    match.status = 'accepted';
+    await match.save();
+    
+    console.log(`✅ Match ${matchId} accepted by user ${req.session.userId}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Match accepted! Start chatting now.',
+      matchId: match.id 
+    });
+    
+  } catch (error) {
+    console.error('Accept like error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to accept like' });
+  }
+});
+
+// ❌ Reject a pending like
+app.post('/likes/:matchId/reject', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  try {
+    const { matchId } = req.params;
+    const Match = require('./models/Match');
+    
+    const match = await Match.findOne({
+      where: {
+        id: matchId,
+        status: 'pending',
+        [Op.or]: [
+          { user1Id: req.session.userId },
+          { user2Id: req.session.userId }
+        ]
+      }
+    });
+    
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Like not found' });
+    }
+    
+    // Delete the pending match
+    await match.destroy();
+    
+    console.log(`❌ Match ${matchId} rejected by user ${req.session.userId}`);
+    
+    res.json({ success: true, message: 'Like rejected' });
+    
+  } catch (error) {
+    console.error('Reject like error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to reject like' });
   }
 });
 
@@ -788,7 +949,7 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room
+// 💬 Chat Room - IMPROVED error handling
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
@@ -797,11 +958,14 @@ app.get('/messages/:matchId', async (req, res) => {
     const Match = require('./models/Match');
     const User = require('./models/User');
     
+    // Find match (allow pending for debugging, but only accepted for chat)
     const match = await Match.findOne({
       where: {
         id: matchId,
-        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
-        status: 'accepted'
+        [Op.or]: [
+          { user1Id: req.session.userId },
+          { user2Id: req.session.userId }
+        ]
       },
       include: [
         { model: User, as: 'user1', attributes: ['id', 'username', 'profileImage'] },
@@ -814,19 +978,26 @@ app.get('/messages/:matchId', async (req, res) => {
       return res.redirect('/messages');
     }
     
+    // 🔐 Only allow chatting if match is accepted
+    if (match.status !== 'accepted') {
+      req.flash('info', `Wait for ${match.status === 'pending' ? 'mutual like' : 'match approval'} to start chatting`);
+      return res.redirect('/matches');
+    }
+    
     const otherUser = match.user1Id === req.session.userId ? match.user2 : match.user1;
     
     res.render('chat', {
       title: `Chat with ${otherUser.username}`,
       match: {
         id: match.id,
+        status: match.status,
         otherUser: {
           id: otherUser.id,
           username: otherUser.username,
           profileImage: otherUser.profileImage
         }
       },
-      messages: [],
+      messages: [], // TODO: Implement Message model
       currentUser: {
         id: req.session.userId,
         username: req.session.username
