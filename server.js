@@ -524,48 +524,154 @@ app.get('/dashboard', async (req, res) => {
   }
 });
 
-// 👤 Profile GET
+// ============================================
+// 👤 PROFILE ROUTES - PRODUCTION READY
+// ============================================
+
+// Profile GET
 app.get('/profile', async (req, res) => {
-  if (!req.session.userId) return res.redirect('/login');
   try {
+    // 🔐 Auth check
+    if (!req.session.userId) {
+      req.flash('error', 'Please login to continue');
+      return res.redirect('/login');
+    }
+    
     const User = require('./models/User');
+    
+    // Fetch current user
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
+    
     if (!user) {
       req.session.destroy();
       return res.redirect('/login');
     }
-    res.render('profile', { title: 'My Profile', user });
+    
+    res.render('profile', {
+      title: 'Edit Profile',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        age: user.age,
+        gender: user.gender,
+        lookingFor: user.lookingFor,
+        location: user.location,
+        bio: user.bio,
+        interests: user.interests,
+        profileImage: user.profileImage,
+        isVerified: user.isVerified
+      }
+    });
+    
   } catch (error) {
-    console.error('Profile error:', error.message);
+    console.error('Profile GET error:', error.message);
+    req.flash('error', 'Failed to load profile');
     res.redirect('/dashboard');
   }
 });
 
-// 👤 Profile POST
+// Profile POST - Update Profile
 app.post('/profile', async (req, res) => {
-  if (!req.session.userId) return res.redirect('/login');
   try {
-    const { bio, location, interests } = req.body;
-    const User = require('./models/User');
-    const user = await User.findByPk(req.session.userId);
-    if (!user) return res.redirect('/login');
-    if (bio !== undefined) user.bio = bio.substring(0, 500);
-    if (location !== undefined) user.location = location.substring(0, 100);
-    if (interests !== undefined) {
-      user.interests = interests.split(',').map(i => i.trim()).filter(Boolean).slice(0, 20);
+    if (!req.session.userId) {
+      req.flash('error', 'Please login to continue');
+      return res.redirect('/login');
     }
+    
+    const { bio, location, interests, profileImage } = req.body;
+    const User = require('./models/User');
+    
+    const user = await User.findByPk(req.session.userId);
+    if (!user) {
+      req.session.destroy();
+      return res.redirect('/login');
+    }
+    
+    // Update fields with validation
+    if (bio !== undefined) {
+      user.bio = bio.trim().substring(0, 500); // Max 500 chars
+    }
+    
+    if (location !== undefined) {
+      user.location = location.trim().substring(0, 100); // Max 100 chars
+    }
+    
+    if (interests !== undefined) {
+      // Parse comma-separated interests, limit to 20
+      user.interests = interests
+        .split(',')
+        .map(i => i.trim())
+        .filter(i => i.length > 0)
+        .slice(0, 20);
+    }
+    
+    if (profileImage !== undefined && profileImage.startsWith('http')) {
+      user.profileImage = profileImage.substring(0, 255);
+    }
+    
     await user.save();
-    req.flash('success', 'Profile updated!');
+    
+    // Update session with new user data
+    req.session.user = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      profileImage: user.profileImage
+    };
+    
+    req.flash('success', 'Profile updated successfully!');
     res.redirect('/profile');
+    
   } catch (error) {
-    console.error('Profile update error:', error.message);
-    req.flash('error', 'Failed to update profile');
+    console.error('Profile POST error:', error.message);
+    
+    if (error.name === 'SequelizeValidationError') {
+      const messages = error.errors.map(e => e.message);
+      req.flash('error', messages);
+    } else {
+      req.flash('error', 'Failed to update profile');
+    }
+    
     res.redirect('/profile');
   }
 });
 
+// Profile Image Upload (Optional - for future)
+app.post('/profile/upload-image', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  try {
+    const { imageUrl } = req.body;
+    
+    if (!imageUrl || !imageUrl.startsWith('http')) {
+      return res.status(400).json({ success: false, message: 'Invalid image URL' });
+    }
+    
+    const User = require('./models/User');
+    const user = await User.findByPk(req.session.userId);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    user.profileImage = imageUrl.substring(0, 255);
+    await user.save();
+    
+    // Update session
+    req.session.user.profileImage = user.profileImage;
+    
+    res.json({ success: true, message: 'Profile image updated', imageUrl: user.profileImage });
+    
+  } catch (error) {
+    console.error('Image upload error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to upload image' });
+  }
+});
 // 💕 Matches
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
