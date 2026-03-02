@@ -1,273 +1,88 @@
-<%- include('partials/header') %>
+<!-- views/profile.ejs -->
+<%- include('partials/header', { activePage: 'profile' }) %>
 
-<div class="profile-container">
-    <div class="profile-header">
-        <h1>My Profile</h1>
-        <p>Manage your account information and preferences</p>
+<div class="profile-container" style="max-width:700px;margin:2rem auto;padding:0 1rem">
+  
+  <!-- Page Header -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2rem">
+    <h1 style="margin:0;color:#1A1A2E">👤 Edit Profile</h1>
+    <a href="/dashboard" style="color:#666;text-decoration:none">← Back to Dashboard</a>
+  </div>
+  
+  <!-- Flash Messages -->
+  <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
+    <div style="background:#FEF2F2;color:#991B1B;padding:1rem;border-radius:8px;margin-bottom:1.5rem">
+      <% error.forEach(msg => { %><p style="margin:0.25rem 0"><%= msg %></p><% }) %>
     </div>
-
-    <div class="profile-grid">
-        <!-- Profile Preview Card -->
-        <div class="profile-card">
-            <div class="profile-avatar">
-                <span class="avatar-emoji"><%= getAvatarEmoji(user.gender) %></span>
-                <% if (typeof isOnline !== 'undefined' && isOnline(user.lastActive)) { %>
-                    <span class="online-indicator"></span>
-                <% } %>
-            </div>
-            <h2><%= user.username %>, <%= user.age %></h2>
-            <p class="profile-location">📍 <%= user.location %></p>
-            <p class="profile-bio"><%= user.bio %></p>
-            <% if (user.interests && user.interests.length > 0) { %>
-                <div class="profile-interests">
-                    <% user.interests.forEach(interest => { %>
-                        <span class="interest-tag"><%= interest %></span>
-                    <% }) %>
-                </div>
-            <% } %>
-            <div class="profile-meta">
-                <span>Joined: <%= formatDate(user.createdAt) %></span>
-                <% if (user.lastActive) { %>
-                    <span>Last active: <%= formatRelativeTime(user.lastActive) %></span>
-                <% } %>
-            </div>
-        </div>
-
-        <!-- Edit Profile Form -->
-        <div class="profile-form-card">
-            <h3>Edit Profile</h3>
-            <form action="/profile" method="POST" class="profile-form">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                
-                <div class="form-group">
-                    <label for="bio">Bio</label>
-                    <textarea id="bio" name="bio" rows="4" maxlength="<%= constants.BIO_MAX_LENGTH %>" placeholder="Tell others about yourself..."><%= user.bio %></textarea>
-                    <small><span id="bio-count"><%= user.bio ? user.bio.length : 0 %></span>/<%= constants.BIO_MAX_LENGTH %> characters</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="location">Location</label>
-                    <input type="text" id="location" name="location" value="<%= user.location %>" placeholder="City, Ethiopia" list="cities">
-                    <datalist id="cities">
-                        <% constants.ETHIOPIAN_CITIES.forEach(city => { %>
-                            <option value="<%= city %>">
-                        <% }) %>
-                    </datalist>
-                </div>
-
-                <div class="form-group">
-                    <label for="interests">Interests</label>
-                    <input type="text" id="interests" name="interests" value="<%= user.interests ? user.interests.join(', ') : '' %>" placeholder="Music, Travel, Sports (comma separated)">
-                    <small>Separate multiple interests with commas</small>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </form>
-        </div>
-
-        <!-- Change Password -->
-        <div class="profile-form-card">
-            <h3>Change Password</h3>
-            <form action="/profile/change-password" method="POST" class="profile-form">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                
-                <div class="form-group">
-                    <label for="currentPassword">Current Password</label>
-                    <input type="password" id="currentPassword" name="currentPassword" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="newPassword">New Password</label>
-                    <input type="password" id="newPassword" name="newPassword" required minlength="<%= constants.PASSWORD_MIN_LENGTH %>">
-                    <small>Min <%= constants.PASSWORD_MIN_LENGTH %> chars, include uppercase, lowercase & number</small>
-                </div>
-
-                <div class="form-group">
-                    <label for="confirmPassword">Confirm New Password</label>
-                    <input type="password" id="confirmPassword" name="confirmPassword" required>
-                </div>
-
-                <button type="submit" class="btn btn-secondary">Update Password</button>
-            </form>
-        </div>
-
-        <!-- Danger Zone -->
-        <div class="profile-form-card danger-zone">
-            <h3>⚠️ Danger Zone</h3>
-            <p>These actions are irreversible. Please proceed with caution.</p>
-            
-            <details class="danger-details">
-                <summary>Deactivate Account (Temporary)</summary>
-                <p>You can reactivate anytime by logging back in.</p>
-                <form action="/settings/deactivate" method="POST" onsubmit="return confirm('Are you sure you want to deactivate your account?');">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="btn btn-warning">Deactivate Account</button>
-                </form>
-            </details>
-            
-            <details class="danger-details">
-                <summary>Delete Account (Permanent)</summary>
-                <p>All your data, matches, and messages will be permanently deleted.</p>
-                <form action="/profile/delete" method="POST" onsubmit="return confirm('This cannot be undone. Are you absolutely sure you want to delete your account?');">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button type="submit" class="btn btn-danger">Delete Account Forever</button>
-                </form>
-            </details>
-        </div>
+  <% } %>
+  
+  <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
+    <div style="background:#F0FDF4;color:#166534;padding:1rem;border-radius:8px;margin-bottom:1.5rem">
+      <% success.forEach(msg => { %><p style="margin:0.25rem 0"><%= msg %></p><% }) %>
     </div>
+  <% } %>
+  
+  <!-- Profile Form -->
+  <form action="/profile" method="POST" style="background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)">
+    <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+    
+    <!-- Profile Image -->
+    <div style="text-align:center;margin-bottom:2rem">
+      <div style="width:120px;height:120px;margin:0 auto 1rem;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center">
+        <% if (user.profileImage && user.profileImage.startsWith('http')) { %>
+          <img src="<%= user.profileImage %>" alt="<%= user.username %>" style="width:100%;height:100%;object-fit:cover">
+        <% } else { %>
+          <span style="font-size:3rem;color:white"><%= getAvatarEmoji ? getAvatarEmoji(user.username) : '👤' %></span>
+        <% } %>
+      </div>
+      <input type="url" name="profileImage" placeholder="https://example.com/photo.jpg" 
+             value="<%= user.profileImage || '' %>"
+             style="width:100%;max-width:400px;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px"
+             pattern="https?://.+">
+      <small style="color:#666">Enter image URL (optional)</small>
+    </div>
+    
+    <!-- Bio -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600">About Me</label>
+      <textarea name="bio" rows="4" maxlength="500" 
+                style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px;resize:vertical"><%= user.bio || '' %></textarea>
+      <small style="color:#666">Max 500 characters</small>
+    </div>
+    
+    <!-- Location -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Location</label>
+      <input type="text" name="location" maxlength="100" value="<%= user.location || '' %>"
+             placeholder="Addis Ababa, Ethiopia"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+    </div>
+    
+    <!-- Interests -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Interests</label>
+      <input type="text" name="interests" 
+             value="<%= user.interests && user.interests.length > 0 ? user.interests.join(', ') : '' %>"
+             placeholder="Coffee, Travel, Music (comma-separated)"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+      <small style="color:#666">Separate with commas, max 20 interests</small>
+    </div>
+    
+    <!-- Read-only Fields -->
+    <div style="background:#f9fafb;padding:1rem;border-radius:8px;margin-bottom:1.5rem">
+      <p style="margin:0.25rem 0"><strong>Username:</strong> <%= user.username %></p>
+      <p style="margin:0.25rem 0"><strong>Email:</strong> <%= user.email %></p>
+      <p style="margin:0.25rem 0"><strong>Age:</strong> <%= user.age %></p>
+      <p style="margin:0.25rem 0"><strong>Looking for:</strong> <%= user.lookingFor %></p>
+      <small style="color:#666">Contact support to change these fields</small>
+    </div>
+    
+    <!-- Submit -->
+    <button type="submit" style="width:100%;padding:1rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:8px;font-weight:600;font-size:1rem;cursor:pointer">
+      Save Changes
+    </button>
+  </form>
+  
 </div>
-
-<script>
-// Bio character counter
-const bioInput = document.getElementById('bio');
-const bioCount = document.getElementById('bio-count');
-if (bioInput && bioCount) {
-    bioInput.addEventListener('input', function() {
-        bioCount.textContent = this.value.length;
-    });
-}
-
-// Password match validation
-const newPassword = document.getElementById('newPassword');
-const confirmPassword = document.getElementById('confirmPassword');
-if (newPassword && confirmPassword) {
-    confirmPassword.addEventListener('input', function() {
-        if (this.value && this.value !== newPassword.value) {
-            this.setCustomValidity('Passwords do not match');
-        } else {
-            this.setCustomValidity('');
-        }
-    });
-}
-</script>
-
-<style>
-    .profile-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 2rem;
-    }
-    .profile-header {
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .profile-header h1 {
-        color: var(--primary-color);
-        margin-bottom: 0.5rem;
-    }
-    .profile-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-    }
-    .profile-card {
-        background: var(--card-background);
-        padding: 2rem;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-        text-align: center;
-        grid-column: 1 / -1;
-    }
-    .profile-avatar {
-        position: relative;
-        font-size: 4rem;
-        margin-bottom: 1rem;
-    }
-    .online-indicator {
-        position: absolute;
-        bottom: 10px;
-        right: 10px;
-        width: 20px;
-        height: 20px;
-        background: var(--success-color);
-        border: 3px solid white;
-        border-radius: 50%;
-    }
-    .profile-location {
-        color: var(--text-light);
-        margin: 0.5rem 0;
-    }
-    .profile-bio {
-        margin: 1rem 0;
-        line-height: 1.5;
-    }
-    .profile-interests {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        justify-content: center;
-        margin: 1rem 0;
-    }
-    .profile-meta {
-        display: flex;
-        justify-content: center;
-        gap: 1rem;
-        color: var(--text-light);
-        font-size: 0.9rem;
-        margin-top: 1rem;
-    }
-    .profile-form-card {
-        background: var(--card-background);
-        padding: 2rem;
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-    }
-    .profile-form-card h3 {
-        margin-bottom: 1.5rem;
-        color: var(--text-color);
-        border-bottom: 2px solid var(--border-color);
-        padding-bottom: 0.5rem;
-    }
-    .profile-form {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-    }
-    .form-group small {
-        display: block;
-        margin-top: 0.25rem;
-        color: var(--text-light);
-    }
-    .danger-zone {
-        border: 2px solid var(--error-color);
-        background: #fff5f5;
-    }
-    .danger-zone h3 {
-        color: var(--error-color);
-    }
-    .danger-details {
-        margin: 1rem 0;
-        padding: 1rem;
-        background: white;
-        border-radius: var(--border-radius);
-    }
-    .danger-details summary {
-        cursor: pointer;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-    }
-    .btn-warning {
-        background: var(--warning-color);
-        color: white;
-    }
-    .btn-warning:hover {
-        background: #f57c00;
-    }
-    .btn-danger {
-        background: var(--error-color);
-        color: white;
-    }
-    .btn-danger:hover {
-        background: #c62828;
-    }
-    @media (max-width: 768px) {
-        .profile-grid {
-            grid-template-columns: 1fr;
-        }
-        .profile-card {
-            grid-column: 1;
-        }
-    }
-</style>
 
 <%- include('partials/footer') %>
