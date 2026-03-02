@@ -1,12 +1,4 @@
-// server.js - EthioMatch Production Ready (Vercel + Neon + PostgreSQL)
-if (process.env.NODE_ENV === 'production') {
-  process.on('warning', (warning) => {
-    if (warning.name === 'SecurityWarning' && warning.message.includes('sslmode')) {
-      return; // Ignore this specific warning
-    }
-    console.warn(warning); // Log other warnings
-  });
-}
+// server.js - EthioMatch Production Ready (Login + Session Fixed)
 require('dotenv').config();
 
 const express = require('express');
@@ -30,10 +22,11 @@ let sequelize;
 const connectDB = async () => {
   try {
     if (!process.env.DATABASE_URL) {
-      console.error('❌ DATABASE_URL not set in environment variables');
+      console.error('❌ DATABASE_URL not set');
       return null;
     }
     
+    // Clean connection string
     let dbUrl = process.env.DATABASE_URL.trim();
     if (dbUrl.startsWith('"') && dbUrl.endsWith('"')) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
@@ -54,10 +47,8 @@ const connectDB = async () => {
     
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
-    
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
-    
     return sequelize;
   } catch (error) {
     console.error('❌ Neon Connection Error:', error.message);
@@ -67,7 +58,10 @@ const connectDB = async () => {
 
 connectDB();
 
-// 📦 SESSION CONFIGURATION - Vercel Preview + Production Compatible
+// ============================================
+// 📦 SESSION CONFIGURATION - FIXED FOR VERCEL
+// ============================================
+
 app.use(session({
   store: new PostgreSQLStore({
     conObject: {
@@ -82,31 +76,18 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
+    // ✅ Vercel uses HTTPS in production
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
+    // ✅ Critical for Vercel serverless + preview URLs
     sameSite: 'lax',
-    path: '/',
-    // ✅ Critical: Allow cookies on Vercel preview domains
-    domain: process.env.VERCEL_URL
-      ? '.' + process.env.VERCEL_URL.replace(/^https?:\/\//, '') 
-      : undefined
+    path: '/'
+    // ✅ Do NOT set 'domain' for Vercel preview URLs - let browser handle it
   },
   name: 'ethiomatch.sid'
 }));
-// 🔍 SESSION DEBUG - Add after app.use(session(...))
-app.use((req, res, next) => {
-  if (req.path === '/dashboard' || req.path === '/login') {
-    console.log('🔍 Session Debug:', {
-      path: req.path,
-      sessionId: req.sessionID?.substring(0, 12),
-      userId: req.session?.userId,
-      hasCookie: !!req.headers.cookie,
-      vercelUrl: process.env.VERCEL_URL
-    });
-  }
-  next();
-});
+
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
@@ -124,7 +105,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // ============================================
-// 🔐 CSRF TOKEN
+// 🔐 CSRF TOKEN (Simple Implementation)
 // ============================================
 
 app.use((req, res, next) => {
@@ -195,7 +176,7 @@ app.use(async (req, res, next) => {
 // 🚦 ROUTES
 // ============================================
 
-// Health Check
+// 🏥 Health Check
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
   try {
@@ -213,7 +194,7 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// Home Page
+// 🏠 Home Page
 app.get('/', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -222,50 +203,52 @@ app.get('/', (req, res) => {
   }
 });
 
-// Login GET - SIMPLIFIED
+// 🔐 Login GET - FIXED
 app.get('/login', (req, res) => {
-  console.log('🔍 GET /login - Rendering login page');
-  console.log('  - Session userId:', req.session.userId);
-  console.log('  - Already logged in:', !!req.session.userId);
+  console.log('🔍 GET /login - Session check:', {
+    userId: req.session.userId,
+    hasSession: !!req.session,
+    sessionId: req.sessionID?.substring(0, 12)
+  });
   
+  // If already logged in, redirect to dashboard
   if (req.session.userId) {
-    console.log('  - Redirecting to /dashboard (already logged in)');
+    console.log('✅ User already logged in, redirecting to /dashboard');
     return res.redirect('/dashboard');
   }
   
-  try {
-    res.render('login', { 
-      title: 'Login',
-      error: req.flash('error'),
-      success: req.flash('success')
-    });
-  } catch (error) {
-    console.error('❌ Login page render error:', error.message);
-    res.status(500).send('Error loading login page: ' + error.message);
-  }
+  res.render('login', { 
+    title: 'Login',
+    error: req.flash('error'),
+    success: req.flash('success')
+  });
 });
 
-// Login POST - SIMPLIFIED
+// 🔐 Login POST - FIXED & PRODUCTION READY
 app.post('/login', async (req, res) => {
   console.log('🔍 POST /login - Attempting login');
-  console.log('  - Body:', JSON.stringify(req.body));
+  console.log('  - Body username:', req.body.username);
+  console.log('  - Session before:', { id: req.sessionID?.substring(0, 12), userId: req.session.userId });
   
   try {
     const { username, password } = req.body;
     
+    // Validate input
     if (!username || !password) {
+      console.log('❌ Missing username or password');
       req.flash('error', 'Please enter username and password');
       return res.redirect('/login');
     }
     
     const User = require('./models/User');
     
+    // Find user (case-insensitive)
     console.log('  - Searching for user:', username);
     const user = await User.findOne({
       where: {
         [Op.or]: [
-          { username: { [Op.iLike]: username } },
-          { email: { [Op.iLike]: username } }
+          { username: { [Op.iLike]: username.trim() } },
+          { email: { [Op.iLike]: username.toLowerCase().trim() } }
         ]
       }
     });
@@ -273,39 +256,50 @@ app.post('/login', async (req, res) => {
     console.log('  - User found:', !!user);
     
     if (!user) {
+      console.log('❌ User not found');
       req.flash('error', 'Invalid credentials');
       return res.redirect('/login');
     }
     
+    // Compare password with bcrypt
     console.log('  - Comparing password...');
     const isMatch = await user.comparePassword(password);
     console.log('  - Password match:', isMatch);
     
     if (!isMatch) {
+      console.log('❌ Password mismatch');
       req.flash('error', 'Invalid credentials');
       return res.redirect('/login');
     }
     
+    // Check if account is active
     if (!user.isActive) {
+      console.log('❌ Account deactivated');
       req.flash('error', 'Account deactivated');
       return res.redirect('/login');
     }
     
-    // Set session
+    // ✅ Login successful - Set session
+    console.log('✅ Login successful:', user.username);
+    
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.user = {
       id: user.id,
       username: user.username,
-      email: user.email
+      email: user.email,
+      profileImage: user.profileImage
     };
     
-    console.log('✅ Login successful:', user.username);
-    console.log('  - Session userId:', req.session.userId);
-    console.log('  - Redirecting to /dashboard');
+    console.log('  - Session after:', { 
+      userId: req.session.userId, 
+      username: req.session.username 
+    });
     
+    // Update last active timestamp (non-blocking)
     await user.updateLastActive().catch(() => {});
     
+    console.log('  - Redirecting to /dashboard');
     res.redirect('/dashboard');
     
   } catch (error) {
@@ -316,7 +310,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Register GET
+// 📝 Register GET
 app.get('/register', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -325,40 +319,52 @@ app.get('/register', (req, res) => {
   }
 });
 
-// Register POST
+// 📝 Register POST - PRODUCTION READY
 app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
+    
+    // Validate required fields
     if (!username || username.trim().length < 3) {
       req.flash('error', 'Username must be at least 3 characters');
       return res.redirect('/register');
     }
+    
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       req.flash('error', 'Please enter a valid email');
       return res.redirect('/register');
     }
+    
     if (!password || password.length < 8) {
       req.flash('error', 'Password must be at least 8 characters');
       return res.redirect('/register');
     }
+    
+    // Age validation: strict integer + bounds
     const ageNumber = parseInt(String(age).trim(), 10);
     if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
       req.flash('error', 'You must be 18-100 years old');
       return res.redirect('/register');
     }
+    
     if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
       req.flash('error', 'Please select a valid gender');
       return res.redirect('/register');
     }
+    
     if (!lookingFor || !['Male', 'Female', 'Both'].includes(lookingFor)) {
       req.flash('error', 'Please select what you are looking for');
       return res.redirect('/register');
     }
+    
     if (!terms) {
       req.flash('error', 'You must agree to the Terms of Service');
       return res.redirect('/register');
     }
+    
     const User = require('./models/User');
+    
+    // Check for existing user (case-insensitive)
     const existing = await User.findOne({
       where: {
         [Op.or]: [
@@ -367,10 +373,13 @@ app.post('/register', async (req, res) => {
         ]
       }
     });
+    
     if (existing) {
       req.flash('error', 'Username or email already exists');
       return res.redirect('/register');
     }
+    
+    // Create user - PostgreSQL + Sequelize enforce constraints
     const user = await User.create({
       username: username.trim(),
       email: email.toLowerCase(),
@@ -380,46 +389,76 @@ app.post('/register', async (req, res) => {
       lookingFor: lookingFor,
       location: location || 'Ethiopia'
     });
+    
+    console.log('✅ User created:', user.username, 'Age:', user.age);
+    
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
+    
   } catch (error) {
     console.error('Register error:', error.message);
+    
     if (error.name === 'SequelizeValidationError') {
       const messages = error.errors.map(e => e.message);
       req.flash('error', messages);
     } else if (error.name === 'SequelizeUniqueConstraintError') {
       req.flash('error', 'Username or email already exists');
+    } else if (error.message.includes('users_age_check')) {
+      req.flash('error', 'Age must be between 18 and 100');
     } else {
       req.flash('error', 'Registration failed. Please try again.');
     }
+    
     res.redirect('/register');
   }
 });
 
-// Logout
+// 🚪 Logout
 app.get('/logout', (req, res) => {
-  req.session.destroy();
+  console.log('🔍 Logout - Destroying session for user:', req.session.username);
+  req.session.destroy((err) => {
+    if (err) console.error('Session destroy error:', err);
+  });
   res.redirect('/login');
 });
 
-// Dashboard
+// 📊 Dashboard - PRODUCTION READY
 app.get('/dashboard', async (req, res) => {
+  console.log('🔍 GET /dashboard - Session check:', {
+    userId: req.session.userId,
+    username: req.session.username,
+    hasSession: !!req.session
+  });
+  
   try {
+    // 🔐 Authentication Check
     if (!req.session.userId) {
+      console.log('❌ No session userId - redirecting to login');
       req.flash('error', 'Please login to continue');
       return res.redirect('/login');
     }
+    
     const User = require('./models/User');
     const Match = require('./models/Match');
+    
+    // 👤 Fetch Current User (exclude password)
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
+    
+    console.log('  - User fetched:', !!user, 'isActive:', user?.isActive);
+    
     if (!user || !user.isActive) {
+      console.log('❌ User not found or inactive - destroying session');
       req.session.destroy();
       req.flash('error', 'Account not found or deactivated');
       return res.redirect('/login');
     }
+    
+    // 🔄 Update last active (non-blocking)
     await user.updateLastActive().catch(() => {});
+    
+    // 💕 Fetch Accepted Matches
     const acceptedMatches = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }],
@@ -432,10 +471,15 @@ app.get('/dashboard', async (req, res) => {
       order: [['updatedAt', 'DESC']],
       limit: 20
     });
+    
+    // Transform to show the "other" user in each match
     const matches = acceptedMatches.map(match => {
       return match.user1Id === user.id ? match.user2 : match.user1;
     }).filter(Boolean);
+    
+    // 🔍 Fetch Potential Matches (not yet matched)
     const matchedUserIds = matches.map(m => m.id);
+    
     const potentialMatches = await User.findAll({
       where: {
         id: { [Op.notIn]: [user.id, ...matchedUserIds] },
@@ -447,6 +491,8 @@ app.get('/dashboard', async (req, res) => {
       limit: 12,
       order: [['lastActive', 'DESC']]
     });
+    
+    // 📊 Fetch Stats
     const [matchCount, likeCount] = await Promise.all([
       Match.count({
         where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'accepted' }
@@ -455,6 +501,10 @@ app.get('/dashboard', async (req, res) => {
         where: { [Op.or]: [{ user1Id: user.id }, { user2Id: user.id }], status: 'pending' }
       })
     ]);
+    
+    console.log('✅ Dashboard rendered for:', user.username);
+    
+    // 🎨 Render Dashboard
     res.render('dashboard', {
       title: 'Dashboard',
       user: {
@@ -477,14 +527,15 @@ app.get('/dashboard', async (req, res) => {
       stats: { matchCount, likeCount, potentialCount: potentialMatches.length },
       activePage: 'dashboard'
     });
+    
   } catch (error) {
-    console.error('Dashboard error:', error.message);
+    console.error('❌ Dashboard error:', error.message);
     req.flash('error', 'Failed to load dashboard');
     res.redirect('/');
   }
 });
 
-// Profile GET
+// 👤 Profile GET
 app.get('/profile', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
@@ -503,7 +554,7 @@ app.get('/profile', async (req, res) => {
   }
 });
 
-// Profile POST
+// 👤 Profile POST
 app.post('/profile', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
@@ -526,7 +577,7 @@ app.post('/profile', async (req, res) => {
   }
 });
 
-// Matches
+// 💕 Matches
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
@@ -552,7 +603,7 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// Like User
+// ❤️ Like User (API)
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -589,7 +640,7 @@ app.post('/like/:userId', async (req, res) => {
   }
 });
 
-// Messages
+// 💬 Messages
 app.get('/messages/:matchId', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
@@ -615,44 +666,8 @@ app.get('/messages/:matchId', async (req, res) => {
     res.redirect('/matches');
   }
 });
-// 🔍 TEMPORARY DEBUG ROUTES (Remove after fixing)
-app.get('/debug/server', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    routes: {
-      login: 'GET /login, POST /login',
-      register: 'GET /register, POST /register',
-      dashboard: 'GET /dashboard',
-      health: 'GET /health'
-    },
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'MISSING',
-      SESSION_SECRET: process.env.SESSION_SECRET ? 'SET (' + process.env.SESSION_SECRET.length + ' chars)' : 'MISSING'
-    }
-  });
-});
 
-app.get('/debug/login-test', (req, res) => {
-  res.send(`
-    <html>
-      <head><title>Login Debug</title></head>
-      <body>
-        <h1>Login Debug Test</h1>
-        <p>Session ID: ${req.sessionID}</p>
-        <p>Session userId: ${req.session.userId || 'NOT SET'}</p>
-        <p>Cookie: ${req.headers.cookie || 'NONE'}</p>
-        <hr>
-        <a href="/login">Go to Login</a> | 
-        <a href="/debug/server">Server Info</a> | 
-        <a href="/health">Health Check</a>
-      </body>
-    </html>
-  `);
-});
-
-// 404 Handler
+// ❌ 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
   res.status(404).render('error', {
@@ -662,7 +677,7 @@ app.use((req, res) => {
   });
 });
 
-// Error Handler
+// 🚨 Global Error Handler
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   if (res.headersSent) return next(err);
@@ -685,7 +700,7 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// 🚀 START SERVER
+// 🚀 START SERVER (Vercel Compatible)
 // ============================================
 
 const PORT = process.env.PORT || 3000;
@@ -695,6 +710,7 @@ const server = app.listen(PORT, () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
+// Graceful shutdown for Vercel serverless
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
