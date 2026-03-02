@@ -1,20 +1,60 @@
 // models/Message.js
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../lib/database');
+const User = require('./User');
+const Match = require('./Match');
 
-const messageSchema = new mongoose.Schema({
-  matchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Match', required: true },
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  content: {
-    type: String,
-    required: [true, 'Message content is required'],
-    trim: true,
-    maxlength: 1000
+const Message = sequelize.define('Message', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
-  isRead: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  matchId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: Match,
+      key: 'id'
+    }
+  },
+  senderId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: User,
+      key: 'id'
+    }
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    validate: {
+      len: [1, 1000] // Max 1000 characters
+    }
+  },
+  isRead: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  readAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  }
+}, {
+  tableName: 'messages',
+  timestamps: true,
+  indexes: [
+    { fields: ['matchId'] },
+    { fields: ['senderId'] },
+    { fields: ['createdAt'] }
+  ]
 });
 
-messageSchema.index({ matchId: 1, createdAt: -1 });
+// Associations
+Message.belongsTo(Match, { foreignKey: 'matchId', as: 'match' });
+Message.belongsTo(User, { foreignKey: 'senderId', as: 'sender' });
+Match.hasMany(Message, { foreignKey: 'matchId', as: 'messages' });
+User.hasMany(Message, { foreignKey: 'senderId', as: 'sentMessages' });
 
-module.exports = mongoose.model('Message', messageSchema);
+module.exports = Message;
