@@ -94,6 +94,19 @@ app.use(session({
   },
   name: 'ethiomatch.sid'
 }));
+// 🔍 SESSION DEBUG - Add after app.use(session(...))
+app.use((req, res, next) => {
+  if (req.path === '/dashboard' || req.path === '/login') {
+    console.log('🔍 Session Debug:', {
+      path: req.path,
+      sessionId: req.sessionID?.substring(0, 12),
+      userId: req.session?.userId,
+      hasCookie: !!req.headers.cookie,
+      vercelUrl: process.env.VERCEL_URL
+    });
+  }
+  next();
+});
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
