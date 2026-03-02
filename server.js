@@ -59,35 +59,33 @@ const connectDB = async () => {
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION - FIXED FOR VERCEL
-// ============================================
+// 📦 SESSION CONFIGURATION - TEMPORARY IN-MEMORY FOR TESTING
+// Replace the entire app.use(session({...})) block with this:
+
+const session = require('express-session');
+
+// 🔧 TEMPORARY: Use MemoryStore for testing on Vercel Preview
+// ⚠️ NOTE: MemoryStore loses sessions on restart - use PostgreSQLStore for production!
+const MemoryStore = require('express-session').MemoryStore;
 
 app.use(session({
-  store: new PostgreSQLStore({
-    conObject: {
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
-    },
-    tableName: 'session',
-    createTableIfMissing: true,
-    errorLog: console.error.bind(console)
-  }),
+  // 🔧 TEMPORARY: MemoryStore instead of PostgreSQLStore
+  store: new MemoryStore(),
+  
   secret: process.env.SESSION_SECRET || 'fallback_secret_min_32_chars_here!!',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    // ✅ Vercel uses HTTPS in production
-    secure: process.env.NODE_ENV === 'production',
+    // 🔧 TEMPORARY: Disable secure for preview testing
+    secure: false,  // ← Changed from: process.env.NODE_ENV === 'production'
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 1 day
-    // ✅ Critical for Vercel serverless + preview URLs
+    maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
     path: '/'
-    // ✅ Do NOT set 'domain' for Vercel preview URLs - let browser handle it
+    // 🔧 TEMPORARY: No domain setting for preview URLs
   },
   name: 'ethiomatch.sid'
 }));
-
 // ============================================
 // 🛡️ SECURITY MIDDLEWARE
 // ============================================
