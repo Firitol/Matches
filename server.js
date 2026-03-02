@@ -1,6 +1,6 @@
 // server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Fixed Sessions)
 require('dotenv').config();
-
+onst { formatDate, truncateText, getAvatarEmoji, isOnline } = require('./utils/helpers');
 const express = require('express');
 const session = require('express-session');
 const PostgreSQLStore = require('connect-pg-simple')(session);
@@ -190,7 +190,14 @@ app.use(async (req, res, next) => {
   res.locals.appName = constants.APP_NAME;
   res.locals.currentYear = new Date().getFullYear();
   res.locals.constants = constants;
-  
+  app.use(async (req, res, next) => {
+  // ... other locals ...
+  res.locals.formatDate = formatDate;
+  res.locals.truncateText = truncateText;
+  res.locals.getAvatarEmoji = getAvatarEmoji;  // ✅ This fixes the error
+  res.locals.isOnline = isOnline;
+  next();
+});
   // ✅ Helper: Format dates
   res.locals.formatDate = (date) => {
     if (!date) return '';
