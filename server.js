@@ -1,14 +1,12 @@
-// server.js - EthioMatch FINAL PRODUCTION READY (Availability API + Duplicate Prevention)
+// server.js - EthioMatch FINAL PRODUCTION READY
 require('dotenv').config();
 
-// 🔍 GLOBAL ERROR CATCHER
 process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught Exception:', err.message);
-  console.error('💥 Stack:', err.stack);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('💥 Unhandled Rejection:', reason);
 });
 
 const express = require('express');
@@ -23,29 +21,18 @@ const { Op } = require('sequelize');
 
 const app = express();
 
-// ============================================
-// 🌍 CONSTANTS
-// ============================================
-
 const constants = {
   APP_NAME: 'EthioMatch',
   APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
 };
 
-// ============================================
-// 📦 CENTRAL MODELS IMPORT
-// ============================================
+const { User, Match, Message, Subscription, MessageToken, Payment, sequelize } = require('./models');
 
-const { User, Match, Message, sequelize } = require('./models');
-
-// ============================================
-// 🗄️ NEON POSTGRESQL DATABASE CONNECTION
-// ============================================
-
+// Database Connection
 const connectDB = async () => {
   try {
     if (!process.env.DATABASE_URL) {
-      console.error('❌ DATABASE_URL not set in environment variables');
+      console.error('❌ DATABASE_URL not set');
       return null;
     }
     
@@ -54,14 +41,12 @@ const connectDB = async () => {
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith('psql ')) dbUrl = dbUrl.replace(/^psql\s+/, '');
     if (dbUrl.startsWith('postgresql://')) dbUrl = dbUrl.replace('postgresql://', 'postgres://');
-    if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require&uselibpqcompat=true';
+    if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
     
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
-    
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
-    
     return sequelize;
   } catch (error) {
     console.error('❌ Neon Connection Error:', error.message);
@@ -71,16 +56,9 @@ const connectDB = async () => {
 
 connectDB();
 
-// ============================================
-// 📦 SESSION CONFIGURATION
-// ============================================
-
-const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_URL?.includes('vercel.app');
+// Session Configuration
+const isPreview = process.env.VERCEL_ENV === 'preview' || (process.env.VERCEL_URL && process.env.VERCEL_URL.includes('vercel.app'));
 const useMemoryStore = isPreview || process.env.USE_MEMORY_STORE === 'true';
-
-if (useMemoryStore) {
-  console.log('⚠️ Using MemoryStore for sessions (preview/testing mode)');
-}
 
 app.use(session({
   store: useMemoryStore 
@@ -108,26 +86,7 @@ app.use(session({
   name: 'ethiomatch.sid'
 }));
 
-// 🔍 Session Debug Middleware
-app.use((req, res, next) => {
-  const isDebug = process.env.NODE_ENV === 'development' || req.query.debug === 'session';
-  if (isDebug && ['/login', '/dashboard', '/register'].includes(req.path)) {
-    console.log('🔍 Session Debug:', {
-      path: req.path,
-      method: req.method,
-      sessionId: req.sessionID?.substring(0, 12),
-      userId: req.session?.userId,
-      username: req.session?.username,
-      hasCookie: !!req.headers.cookie
-    });
-  }
-  next();
-});
-
-// ============================================
-// 🛡️ SECURITY MIDDLEWARE
-// ============================================
-
+// Security Middleware
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
@@ -138,12 +97,9 @@ const limiter = rateLimit({
   max: 100,
   message: { success: false, message: 'Too many requests' }
 });
-app.use('/api/', limiter); // Rate limit API endpoints
+app.use('/api/', limiter);
 
-// ============================================
-// 🔐 CSRF TOKEN
-// ============================================
-
+// CSRF Token
 app.use((req, res, next) => {
   if (!res.locals.csrfToken) {
     res.locals.csrfToken = process.env.CSRF_SECRET 
@@ -153,18 +109,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// ============================================
-// 🎨 VIEW ENGINE & STATIC FILES
-// ============================================
-
+// View Engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ============================================
-// 📝 REQUEST PARSING & LOGGING
-// ============================================
-
+// Request Parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));
@@ -173,17 +123,14 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`${req.method} ${req.url} - ${res.statusCode} in ${duration}ms`);
+    console.log(req.method + ' ' + req.url + ' - ' + res.statusCode + ' in ' + duration + 'ms');
   });
   next();
 });
 
 app.use(flash());
 
-// ============================================
-// 🌍 GLOBAL VARIABLES & HELPERS FOR VIEWS
-// ============================================
-
+// Global Variables
 app.use(async (req, res, next) => {
   res.locals.user = req.session.user || null;
   res.locals.success = req.flash('success');
@@ -194,26 +141,26 @@ app.use(async (req, res, next) => {
   res.locals.currentYear = new Date().getFullYear();
   res.locals.constants = constants;
   
-  res.locals.formatDate = (date) => {
+  res.locals.formatDate = function(date) {
     if (!date) return '';
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   };
   
-  res.locals.truncateText = (text, length) => {
+  res.locals.truncateText = function(text, length) {
     if (!text) return '';
     return text.length > length ? text.substring(0, length) + '...' : text;
   };
   
-  res.locals.getAvatarEmoji = (username) => {
+  res.locals.getAvatarEmoji = function(username) {
     if (!username) return '👤';
     const emojis = ['😀', '😊', '🥰', '😎', '🤩', '🙋', '💁', '👩', '👨', '🧑', '🦁', '🐘', '🦒', '🦓', '🐆'];
-    const index = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % emojis.length;
+    const index = username.split('').reduce(function(acc, char) { return acc + char.charCodeAt(0); }, 0) % emojis.length;
     return emojis[index];
   };
   
-  res.locals.isOnline = (lastActive) => {
+  res.locals.isOnline = function(lastActive) {
     if (!lastActive) return false;
     const minutesAgo = (Date.now() - new Date(lastActive).getTime()) / (1000 * 60);
     return minutesAgo < 10;
@@ -223,10 +170,10 @@ app.use(async (req, res, next) => {
 });
 
 // ============================================
-// 🚦 ROUTES
+// ROUTES
 // ============================================
 
-// 🏥 Health Check
+// Health Check
 app.get('/health', async (req, res) => {
   let dbStatus = 'unknown';
   try {
@@ -244,7 +191,7 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// 🏠 Home Page
+// Home
 app.get('/', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -253,7 +200,7 @@ app.get('/', (req, res) => {
   }
 });
 
-// 🔐 Login GET
+// Login GET
 app.get('/login', (req, res) => {
   if (req.session.userId) {
     return res.redirect('/dashboard');
@@ -265,7 +212,7 @@ app.get('/login', (req, res) => {
   });
 });
 
-// 🔐 Login POST
+// Login POST
 app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -311,7 +258,6 @@ app.post('/login', async (req, res) => {
     };
     
     await user.updateLastActive().catch(() => {});
-    
     res.redirect('/dashboard');
     
   } catch (error) {
@@ -321,7 +267,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// 📝 Register GET
+// Register GET
 app.get('/register', (req, res) => {
   if (req.session.userId) {
     res.redirect('/dashboard');
@@ -330,44 +276,11 @@ app.get('/register', (req, res) => {
   }
 });
 
-// ✅ API: Check Username/Email Availability (FOR FRONTEND VALIDATION)
-app.get('/api/check-availability', async (req, res) => {
-  try {
-    const { username, email } = req.query;
-    
-    if (!username && !email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Provide username or email parameter' 
-      });
-    }
-    
-    const { checkAvailability } = require('./utils/userCheck');
-    const result = await checkAvailability({ username, email });
-    
-    res.json({
-      success: true,
-      usernameAvailable: result.usernameAvailable,
-      emailAvailable: result.emailAvailable,
-      errors: result.errors
-    });
-    
-  } catch (error) {
-    console.error('Availability API error:', error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Availability check failed',
-      errors: ['Server error']
-    });
-  }
-});
-
-// 📝 Register POST - WITH DUPLICATE PREVENTION
+// Register POST
 app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
     
-    // Validate required fields
     if (!username || username.trim().length < 3) {
       req.flash('error', 'Username must be at least 3 characters');
       return res.redirect('/register');
@@ -383,7 +296,6 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    // Age validation
     const ageNumber = parseInt(String(age).trim(), 10);
     if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
       req.flash('error', 'You must be 18-100 years old');
@@ -405,36 +317,20 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    // ✅ CHECK FOR DUPLICATES BEFORE CREATING USER
-    const { checkUserExists } = require('./utils/userCheck');
-    const { exists, user: existingUser, error: checkError } = await checkUserExists({ 
-      username, 
-      email, 
-      onlyActive: false // Check even inactive accounts
+    const existing = await User.findOne({
+      where: {
+        [Op.or]: [
+          { username: { [Op.iLike]: username.trim() } },
+          { email: { [Op.iLike]: email.toLowerCase() } }
+        ]
+      }
     });
     
-    if (checkError) {
-      console.error('Duplicate check failed:', checkError);
-      req.flash('error', 'Registration check failed. Please try again.');
+    if (existing) {
+      req.flash('error', 'Username or email already exists');
       return res.redirect('/register');
     }
     
-    if (exists) {
-      // Determine which field conflicts
-      const usernameMatch = existingUser?.username?.toLowerCase() === username?.toLowerCase();
-      const emailMatch = existingUser?.email?.toLowerCase() === email?.toLowerCase();
-      
-      if (usernameMatch && emailMatch) {
-        req.flash('error', 'Username and email already registered');
-      } else if (usernameMatch) {
-        req.flash('error', 'Username already taken');
-      } else {
-        req.flash('error', 'Email already registered');
-      }
-      return res.redirect('/register');
-    }
-    
-    // Create user - PostgreSQL + Sequelize enforce constraints
     const user = await User.create({
       username: username.trim(),
       email: email.toLowerCase(),
@@ -445,8 +341,6 @@ app.post('/register', async (req, res) => {
       location: location || 'Ethiopia'
     });
     
-    console.log('✅ User created:', user.username, 'Age:', user.age);
-    
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
     
@@ -454,12 +348,10 @@ app.post('/register', async (req, res) => {
     console.error('Register error:', error.message);
     
     if (error.name === 'SequelizeValidationError') {
-      const messages = error.errors.map(e => e.message);
+      const messages = error.errors.map(function(e) { return e.message; });
       req.flash('error', messages);
     } else if (error.name === 'SequelizeUniqueConstraintError') {
       req.flash('error', 'Username or email already exists');
-    } else if (error.message.includes('users_age_check')) {
-      req.flash('error', 'Age must be between 18 and 100');
     } else {
       req.flash('error', 'Registration failed. Please try again.');
     }
@@ -468,7 +360,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// 🚪 Logout
+// Logout
 app.get('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) console.error('Session destroy error:', err);
@@ -476,7 +368,7 @@ app.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
-// 📊 Dashboard
+// Dashboard
 app.get('/dashboard', async (req, res) => {
   try {
     if (!req.session.userId) {
@@ -509,15 +401,15 @@ app.get('/dashboard', async (req, res) => {
       limit: 20
     });
     
-    const matches = acceptedMatches.map(match => {
+    const matches = acceptedMatches.map(function(match) {
       return match.user1Id === user.id ? match.user2 : match.user1;
     }).filter(Boolean);
     
-    const matchedUserIds = matches.map(m => m.id);
+    const matchedUserIds = matches.map(function(m) { return m.id; });
     
     const potentialMatches = await User.findAll({
       where: {
-        id: { [Op.notIn]: [user.id, ...matchedUserIds] },
+        id: { [Op.notIn]: [user.id].concat(matchedUserIds) },
         isActive: true,
         gender: user.lookingFor,
         age: { [Op.between]: [18, 100] }
@@ -553,9 +445,9 @@ app.get('/dashboard', async (req, res) => {
         lastActive: user.lastActive,
         createdAt: user.createdAt
       },
-      matches,
-      potentialMatches,
-      stats: { matchCount, likeCount, potentialCount: potentialMatches.length },
+      matches: matches,
+      potentialMatches: potentialMatches,
+      stats: { matchCount: matchCount, likeCount: likeCount, potentialCount: potentialMatches.length },
       activePage: 'dashboard'
     });
     
@@ -566,7 +458,7 @@ app.get('/dashboard', async (req, res) => {
   }
 });
 
-// 👤 Profile GET
+// Profile GET
 app.get('/profile', async (req, res) => {
   try {
     if (!req.session.userId) {
@@ -607,7 +499,7 @@ app.get('/profile', async (req, res) => {
   }
 });
 
-// 👤 Profile POST
+// Profile POST
 app.post('/profile', async (req, res) => {
   try {
     if (!req.session.userId) {
@@ -629,8 +521,8 @@ app.post('/profile', async (req, res) => {
     if (interests !== undefined) {
       user.interests = interests
         .split(',')
-        .map(i => i.trim())
-        .filter(i => i.length > 0)
+        .map(function(i) { return i.trim(); })
+        .filter(function(i) { return i.length > 0; })
         .slice(0, 20);
     }
     
@@ -654,7 +546,7 @@ app.post('/profile', async (req, res) => {
     console.error('Profile POST error:', error.message);
     
     if (error.name === 'SequelizeValidationError') {
-      const messages = error.errors.map(e => e.message);
+      const messages = error.errors.map(function(e) { return e.message; });
       req.flash('error', messages);
     } else {
       req.flash('error', 'Failed to update profile');
@@ -664,7 +556,7 @@ app.post('/profile', async (req, res) => {
   }
 });
 
-// 📸 Profile Photo Upload
+// Profile Photo Upload
 const { upload, uploadToCloudinaryMiddleware } = require('./middleware/upload');
 
 app.post('/profile/upload-photo', 
@@ -685,7 +577,6 @@ app.post('/profile/upload-photo',
         return res.status(404).json({ success: false, message: 'User not found' });
       }
       
-      // Delete old profile image from Cloudinary (if exists)
       if (user.profileImagePublicId) {
         const { deleteFromCloudinary } = require('./lib/cloudinary');
         await deleteFromCloudinary(user.profileImagePublicId).catch(() => {});
@@ -696,8 +587,6 @@ app.post('/profile/upload-photo',
       await user.save();
       
       req.session.user.profileImage = user.profileImage;
-      
-      console.log(`📸 Profile photo updated for ${user.username}`);
       
       res.json({
         success: true,
@@ -712,7 +601,7 @@ app.post('/profile/upload-photo',
   }
 );
 
-// 💕 Matches List
+// Matches
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
@@ -727,7 +616,7 @@ app.get('/matches', async (req, res) => {
       ]
     });
     
-    const matchList = matches.map(m => {
+    const matchList = matches.map(function(m) {
       return m.user1Id === req.session.userId ? m.user2 : m.user1;
     });
     
@@ -738,7 +627,7 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// ❤️ Like User
+// Like User
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -768,30 +657,28 @@ app.post('/like/:userId', async (req, res) => {
         likedBy: [currentUserId],
         status: 'pending'
       });
-      console.log(`💕 New pending match: ${currentUserId} → ${userId}`);
     } else {
-      if (!match.likedBy?.includes(currentUserId)) {
+      if (!match.likedBy || !match.likedBy.includes(currentUserId)) {
+        if (!match.likedBy) match.likedBy = [];
         match.likedBy.push(currentUserId);
         await match.save();
-        console.log(`💕 ${currentUserId} added to likedBy for match ${match.id}`);
       }
     }
     
-    const isMutualLike = match.likedBy?.includes(currentUserId) && match.likedBy?.includes(userId);
+    const isMutualLike = match.likedBy && match.likedBy.includes(currentUserId) && match.likedBy.includes(userId);
     
     if (isMutualLike && match.status !== 'accepted') {
       match.status = 'accepted';
       await match.save();
-      console.log(`🎉 Match ${match.id} ACCEPTED! Mutual like detected.`);
     }
     
     const isMatch = match.status === 'accepted';
     
     res.json({ 
       success: true, 
-      isMatch, 
+      isMatch: isMatch, 
       matchId: match.id,
-      message: isMatch ? "🎉 It's a match! Start chatting now." : "❤️ Like sent! Wait for them to like you back." 
+      message: isMatch ? "It's a match! Start chatting now." : "Like sent! Wait for them to like you back." 
     });
     
   } catch (error) {
@@ -800,126 +687,7 @@ app.post('/like/:userId', async (req, res) => {
   }
 });
 
-// 💕 Pending Likes
-app.get('/likes/pending', async (req, res) => {
-  try {
-    if (!req.session.userId) return res.redirect('/login');
-    
-    const pendingLikes = await Match.findAll({
-      where: {
-        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
-        status: 'pending'
-      },
-      include: [
-        { model: User, as: 'user1', attributes: ['id', 'username', 'age', 'profileImage', 'bio'] },
-        { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage', 'bio'] }
-      ],
-      order: [['createdAt', 'DESC']]
-    });
-    
-    const transformedLikes = pendingLikes.map(match => {
-      const isUser1 = match.user1Id === req.session.userId;
-      const otherUser = isUser1 ? match.user2 : match.user1;
-      return {
-        matchId: match.id,
-        user: otherUser,
-        createdAt: match.createdAt
-      };
-    });
-    
-    res.render('pending-likes', {
-      title: 'Pending Likes',
-      pendingLikes: transformedLikes
-    });
-    
-  } catch (error) {
-    console.error('Pending likes error:', error.message);
-    res.redirect('/dashboard');
-  }
-});
-
-// ✅ Accept Like
-app.post('/likes/:matchId/accept', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    const { matchId } = req.params;
-    
-    const match = await Match.findOne({
-      where: {
-        id: matchId,
-        status: 'pending',
-        [Op.or]: [
-          { user1Id: req.session.userId },
-          { user2Id: req.session.userId }
-        ]
-      }
-    });
-    
-    if (!match) {
-      return res.status(404).json({ success: false, message: 'Like not found' });
-    }
-    
-    if (!match.likedBy?.includes(req.session.userId)) {
-      match.likedBy.push(req.session.userId);
-    }
-    
-    match.status = 'accepted';
-    await match.save();
-    
-    console.log(`✅ Match ${matchId} accepted by user ${req.session.userId}`);
-    
-    res.json({ 
-      success: true, 
-      message: 'Match accepted! Start chatting now.',
-      matchId: match.id 
-    });
-    
-  } catch (error) {
-    console.error('Accept like error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to accept like' });
-  }
-});
-
-// ❌ Reject Like
-app.post('/likes/:matchId/reject', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    const { matchId } = req.params;
-    
-    const match = await Match.findOne({
-      where: {
-        id: matchId,
-        status: 'pending',
-        [Op.or]: [
-          { user1Id: req.session.userId },
-          { user2Id: req.session.userId }
-        ]
-      }
-    });
-    
-    if (!match) {
-      return res.status(404).json({ success: false, message: 'Like not found' });
-    }
-    
-    await match.destroy();
-    
-    console.log(`❌ Match ${matchId} rejected by user ${req.session.userId}`);
-    
-    res.json({ success: true, message: 'Like rejected' });
-    
-  } catch (error) {
-    console.error('Reject like error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to reject like' });
-  }
-});
-
-// 💬 Messages List
+// Messages List
 app.get('/messages', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
@@ -936,7 +704,7 @@ app.get('/messages', async (req, res) => {
       order: [['updatedAt', 'DESC']]
     });
     
-    const conversations = matches.map(match => {
+    const conversations = matches.map(function(match) {
       const isUser1 = match.user1Id === req.session.userId;
       const otherUser = isUser1 ? match.user2 : match.user1;
       return {
@@ -954,7 +722,7 @@ app.get('/messages', async (req, res) => {
     
     res.render('messages', {
       title: 'Messages',
-      conversations,
+      conversations: conversations,
       activeConversation: null
     });
     
@@ -964,7 +732,7 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room
+// Chat Room
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
@@ -998,7 +766,7 @@ app.get('/messages/:matchId', async (req, res) => {
     });
     
     const messagesWithSender = await Promise.all(
-      messages.map(async (msg) => {
+      messages.map(async function(msg) {
         const sender = await User.findByPk(msg.senderId, {
           attributes: ['id', 'username', 'profileImage']
         });
@@ -1006,7 +774,7 @@ app.get('/messages/:matchId', async (req, res) => {
           id: msg.id,
           content: msg.content,
           senderId: msg.senderId,
-          senderName: sender?.username || 'Unknown',
+          senderName: sender ? sender.username : 'Unknown',
           mediaType: msg.mediaType,
           mediaUrl: msg.mediaUrl,
           createdAt: msg.createdAt,
@@ -1032,14 +800,14 @@ app.get('/messages/:matchId', async (req, res) => {
     });
     
     res.render('chat', {
-      title: `Chat with ${otherUser?.username || 'User'}`,
+      title: 'Chat with ' + (otherUser ? otherUser.username : 'User'),
       match: {
         id: match.id,
         status: match.status,
         otherUser: {
-          id: otherUser?.id,
-          username: otherUser?.username || 'User',
-          profileImage: otherUser?.profileImage
+          id: otherUser ? otherUser.id : null,
+          username: otherUser ? otherUser.username : 'User',
+          profileImage: otherUser ? otherUser.profileImage : null
         }
       },
       messages: messagesWithSender,
@@ -1051,12 +819,11 @@ app.get('/messages/:matchId', async (req, res) => {
     
   } catch (error) {
     console.error('Chat room error:', error.message);
-    console.error('Stack:', error.stack);
     res.redirect('/messages');
   }
 });
 
-// 💬 Send Text Message
+// Send Text Message
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -1089,14 +856,12 @@ app.post('/messages/:matchId/send', async (req, res) => {
       mediaType: 'text'
     });
     
-    console.log(`📝 Message saved: ${req.session.username} → match ${matchId}`);
-    
     await match.update({ updatedAt: new Date() });
     
     res.json({
       success: true,
       message: 'Message sent!',
-       {
+      data: {
         id: message.id,
         content: message.content,
         senderId: message.senderId,
@@ -1114,7 +879,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
   }
 });
 
-// 📸 Send Media Message
+// Send Media Message
 app.post('/messages/:matchId/send-media', 
   upload.single('media'),
   uploadToCloudinaryMiddleware,
@@ -1151,8 +916,6 @@ app.post('/messages/:matchId/send-media',
         mediaUrl: req.cloudinaryResult.url
       });
       
-      console.log(`📸 Media message sent: ${req.session.username} → match ${matchId}`);
-      
       await match.update({ updatedAt: new Date() });
       
       res.json({
@@ -1176,15 +939,28 @@ app.post('/messages/:matchId/send-media',
     }
   }
 );
+
 // ============================================
-// ============================================
-// 💎 PREMIUM & PAYMENT ROUTES
+// PREMIUM & PAYMENT ROUTES - SIMPLIFIED & FIXED
 // ============================================
 
-const { PLANS, TOKEN_PACKAGES, createCheckoutSession, getStripeCustomer, createStripeCustomer } = require('./lib/stripe');
-const { Subscription, MessageToken, Payment } = require('./models');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// 💎 Premium Page
+const PLANS = {
+  free: { name: 'Free', price: 0, tokensPerDay: 5 },
+  basic: { name: 'Basic', price: 999, tokensPerDay: 20, stripePriceId: process.env.STRIPE_BASIC_PRICE_ID },
+  premium: { name: 'Premium', price: 1999, tokensPerDay: 999, stripePriceId: process.env.STRIPE_PREMIUM_PRICE_ID },
+  vip: { name: 'VIP', price: 2999, tokensPerDay: 999, stripePriceId: process.env.STRIPE_VIP_PRICE_ID }
+};
+
+const TOKEN_PACKAGES = {
+  10: { price: 499, name: '10 Tokens' },
+  25: { price: 999, name: '25 Tokens' },
+  50: { price: 1699, name: '50 Tokens' },
+  100: { price: 2999, name: '100 Tokens' }
+};
+
+// Premium Page
 app.get('/premium', async (req, res) => {
   try {
     let userSubscription = null;
@@ -1209,7 +985,7 @@ app.get('/premium', async (req, res) => {
   }
 });
 
-// 💳 Create Checkout Session
+// Create Checkout Session
 app.post('/payment/create-checkout', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Please login first' });
@@ -1222,31 +998,71 @@ app.post('/payment/create-checkout', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Must specify plan or tokens' });
     }
     
-    const User = require('./models').User;
     const user = await User.findByPk(req.session.userId);
     
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
-    const { sessionId, url } = await createCheckoutSession({
-      userId: user.id,
-      email: user.email,
-      planType: planType,
-      tokenAmount: tokenAmount
+    let lineItems;
+    
+    if (planType && planType !== 'free') {
+      const plan = PLANS[planType];
+      if (!plan || !plan.stripePriceId) {
+        throw new Error('Invalid plan or Stripe price ID not configured');
+      }
+      lineItems = [
+        {
+          price: plan.stripePriceId,
+          quantity: 1
+        }
+      ];
+    } else if (tokenAmount) {
+      const pkg = TOKEN_PACKAGES[tokenAmount];
+      if (!pkg) {
+        throw new Error('Invalid token package');
+      }
+      lineItems = [
+        {
+          price_ {
+            currency: 'usd',
+            product_ {
+              name: 'EthioMatch ' + pkg.name,
+              description: 'Message tokens for EthioMatch'
+            },
+            unit_amount: pkg.price
+          },
+          quantity: 1
+        }
+      ];
+    }
+    
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: planType && planType !== 'free' ? 'subscription' : 'payment',
+      success_url: process.env.BASE_URL + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: process.env.BASE_URL + '/premium?canceled=true',
+      client_reference_id: user.id,
+      customer_email: user.email,
+      metadata: {
+        userId: user.id,
+        planType: planType || 'tokens',
+        tokenAmount: tokenAmount || ''
+      }
     });
     
     await Payment.create({
       userId: user.id,
-      stripeCheckoutSessionId: sessionId,
-      amount: planType ? PLANS[planType].price : TOKEN_PACKAGES[tokenAmount].price,
+      stripeCheckoutSessionId: session.id,
+      amount: planType ? PLANS[planType].price : (TOKEN_PACKAGES[tokenAmount] ? TOKEN_PACKAGES[tokenAmount].price : 0),
       currency: 'usd',
       status: 'pending',
       paymentType: planType ? 'subscription' : 'tokens',
       metadata: { planType: planType, tokenAmount: tokenAmount }
     });
     
-    res.json({ success: true, url: url });
+    res.json({ success: true, url: session.url });
     
   } catch (error) {
     console.error('Checkout error:', error.message);
@@ -1254,7 +1070,7 @@ app.post('/payment/create-checkout', async (req, res) => {
   }
 });
 
-// ✅ Payment Success Page
+// Payment Success
 app.get('/payment/success', async (req, res) => {
   try {
     const { session_id } = req.query;
@@ -1264,7 +1080,6 @@ app.get('/payment/success', async (req, res) => {
       return res.redirect('/premium');
     }
     
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
     const session = await stripe.checkout.sessions.retrieve(session_id);
     
     if (session.payment_status === 'paid') {
@@ -1317,7 +1132,7 @@ app.get('/payment/success', async (req, res) => {
   }
 });
 
-// 🪙 Check Token Balance API
+// Token Balance API
 app.get('/api/token-balance', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -1351,7 +1166,7 @@ app.get('/api/token-balance', async (req, res) => {
   }
 });
 
-// 🪙 Use Token API
+// Use Token API
 app.post('/api/use-token', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -1387,7 +1202,8 @@ app.post('/api/use-token', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to use token' });
   }
 });
-// ❌ 404 Handler
+
+// 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
   res.status(404).render('error', {
@@ -1397,11 +1213,11 @@ app.use((req, res) => {
   });
 });
 
-// 🚨 Global Error Handler
+// Error Handler
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   if (res.headersSent) return next(err);
-  if (req.headers.accept?.includes('application/json')) {
+  if (req.headers.accept && req.headers.accept.includes('application/json')) {
     return res.status(err.status || 500).json({
       error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
@@ -1419,16 +1235,13 @@ app.use((err, req, res, next) => {
   }
 });
 
-// ============================================
-// 🚀 START SERVER
-// ============================================
-
+// Start Server
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
-  console.log(`🚀 EthioMatch running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔧 Session Store: ${useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'}`);
+  console.log('🚀 EthioMatch running on port ' + PORT);
+  console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
+  console.log('🔧 Session Store: ' + (useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'));
 });
 
 process.on('SIGTERM', () => {
