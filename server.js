@@ -828,9 +828,16 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// Send Text Message - USING VARIABLE (NO NESTED OBJECT)
+// Send Text Message - WITH DETAILED ERROR HANDLING
 app.post('/messages/:matchId/send', async (req, res) => {
+  console.log('🔍 Send message request:', {
+    userId: req.session.userId,
+    matchId: req.params.matchId,
+    body: req.body
+  });
+  
   if (!req.session.userId) {
+    console.log('❌ Unauthorized: No session userId');
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   
@@ -838,22 +845,36 @@ app.post('/messages/:matchId/send', async (req, res) => {
     const { matchId } = req.params;
     const content = req.body.content;
     
+    // Validate content
     if (!content || content.trim().length === 0) {
+      console.log('❌ Validation failed: Empty content');
       return res.status(400).json({ success: false, message: 'Message cannot be empty' });
     }
     
+    // Check match exists and is accepted
+    const Match = require('./models').Match;
     const match = await Match.findOne({
       where: {
         id: matchId,
-        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
-        status: 'accepted'
+        [Op.or]: [
+          { user1Id: req.session.userId },
+          { user2Id: req.session.userId }
+        ],
+        status: 'accepted'  // Must be accepted to chat
       }
     });
     
+    console.log('🔍 Match lookup:', match ? 'Found' : 'Not found', '- Status:', match?.status);
+    
     if (!match) {
-      return res.status(404).json({ success: false, message: 'Conversation not found' });
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Conversation not found or not accepted' 
+      });
     }
     
+    // Create message
+    const Message = require('./models').Message;
     const message = await Message.create({
       matchId: matchId,
       senderId: req.session.userId,
@@ -861,9 +882,12 @@ app.post('/messages/:matchId/send', async (req, res) => {
       mediaType: 'text'
     });
     
+    console.log('✅ Message created:', message.id);
+    
+    // Update match timestamp
     await match.update({ updatedAt: new Date() });
     
-    // USING VARIABLE - NO NESTED OBJECT
+    // Return response
     const responseData = {
       success: true,
       message: 'Message sent!',
@@ -877,11 +901,20 @@ app.post('/messages/:matchId/send', async (req, res) => {
       isRead: message.isRead
     };
     
+    console.log('✅ Response sent:', responseData.success);
     res.json(responseData);
     
   } catch (error) {
-    console.error('Send message error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to send message' });
+    console.error('❌ Send message error:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to send message: ' + error.message 
+    });
   }
 });
 
