@@ -187,7 +187,7 @@ function updateTokenDisplay(tokens) {
   }
 }
 
-// In chat.ejs, replace the send message handler with this:
+// In chat.ejs, replace the send message handler with this SIMPLIFIED version:
 
 if (messageForm) {
   messageForm.addEventListener('submit', async (e) => {
@@ -196,8 +196,6 @@ if (messageForm) {
     const content = messageInput.value.trim();
     if (!content) return;
     
-    console.log('📤 Sending message:', { content: content.substring(0, 50) + '...' });
-    
     // Disable inputs while sending
     messageInput.disabled = true;
     const sendBtn = messageForm.querySelector('button');
@@ -205,6 +203,7 @@ if (messageForm) {
     sendBtn.textContent = 'Sending...';
     
     try {
+      // Send directly to /messages/:id/send (NO token check)
       const response = await fetch('/messages/' + matchId + '/send', {
         method: 'POST',
         headers: {
@@ -213,36 +212,18 @@ if (messageForm) {
         body: JSON.stringify({ content: content })
       });
       
-      console.log('📥 Response status:', response.status);
-      
       const data = await response.json();
-      console.log('📥 Response data:', data);
       
       if (data.success) {
-        console.log('✅ Message sent successfully');
         addMessageToUI(data);
         messageInput.value = '';
-        
-        // Update token display if using tokens
-        if (typeof updateTokenDisplay === 'function' && data.tokens !== undefined) {
-          updateTokenDisplay(data.tokens);
-        }
       } else {
-        console.error('❌ Send failed:', data.message);
         showStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
-        
-        // Show upgrade prompt if tokens exhausted
-        if (data.message && data.message.includes('tokens')) {
-          if (confirm('No tokens available. Upgrade to Premium for unlimited messages?')) {
-            window.location.href = '/premium';
-          }
-        }
       }
     } catch (error) {
-      console.error('❌ Network error:', error);
-      showStatus('Failed to send message. Check your connection.', 'error');
+      console.error('Send error:', error);
+      showStatus('Failed to send message. Please try again.', 'error');
     } finally {
-      // Re-enable inputs
       messageInput.disabled = false;
       if (sendBtn) {
         sendBtn.disabled = false;
