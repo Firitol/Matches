@@ -415,7 +415,48 @@ app.post('/register', async (req, res) => {
     res.redirect('/register');
   }
 });
-
+// In your POST /register route
+app.post('/register', async (req, res) => {
+  try {
+    const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
+    
+    // ✅ Check if user already exists BEFORE creating
+    const { checkUserExists } = require('./utils/userCheck');
+    const { exists, user: existingUser, error } = await checkUserExists({ 
+      username, 
+      email, 
+      onlyActive: false // Check even inactive accounts
+    });
+    
+    if (error) {
+      console.error('User check failed:', error);
+      req.flash('error', 'Registration check failed');
+      return res.redirect('/register');
+    }
+    
+    if (exists) {
+      // Determine which field conflicts
+      const usernameMatch = existingUser?.username?.toLowerCase() === username?.toLowerCase();
+      const emailMatch = existingUser?.email?.toLowerCase() === email?.toLowerCase();
+      
+      if (usernameMatch && emailMatch) {
+        req.flash('error', 'Username and email already registered');
+      } else if (usernameMatch) {
+        req.flash('error', 'Username already taken');
+      } else {
+        req.flash('error', 'Email already registered');
+      }
+      return res.redirect('/register');
+    }
+    
+    // ... rest of registration logic ...
+    
+  } catch (error) {
+    console.error('Register error:', error.message);
+    req.flash('error', 'Registration failed');
+    res.redirect('/register');
+  }
+});
 // 🚪 Logout
 app.get('/logout', (req, res) => {
   req.session.destroy((err) => {
