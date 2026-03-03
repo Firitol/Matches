@@ -1,4 +1,4 @@
-// server.js - EthioMatch PRODUCTION READY (No Premium - Stable Version)
+// server.js - EthioMatch PRODUCTION READY
 require('dotenv').config();
 
 process.on('uncaughtException', (err) => {
@@ -823,7 +823,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// Send Text Message
+// Send Text Message - FIXED
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -858,10 +858,11 @@ app.post('/messages/:matchId/send', async (req, res) => {
     
     await match.update({ updatedAt: new Date() });
     
+    // FIXED: Added "data:" key
     res.json({
       success: true,
       message: 'Message sent!',
-       {
+      data: {
         id: message.id,
         content: message.content,
         senderId: message.senderId,
@@ -879,7 +880,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
   }
 });
 
-// Send Media Message
+// Send Media Message - FIXED
 app.post('/messages/:matchId/send-media', 
   upload.single('media'),
   uploadToCloudinaryMiddleware,
@@ -918,10 +919,11 @@ app.post('/messages/:matchId/send-media',
       
       await match.update({ updatedAt: new Date() });
       
+      // FIXED: Added "data:" key
       res.json({
         success: true,
         message: 'Media sent!',
-         {
+        data: {
           id: message.id,
           content: message.content,
           senderId: message.senderId,
