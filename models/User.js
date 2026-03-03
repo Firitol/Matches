@@ -1,4 +1,4 @@
-// models/User.js
+// models/User.js - NO Message associations here
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
 const bcrypt = require('bcryptjs');
@@ -13,7 +13,7 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(30),
     allowNull: false,
     unique: true,
-    validate: { len: [3, 30], isAlphanumeric: true }
+    validate: { len: [3, 30] }
   },
   email: {
     type: DataTypes.STRING,
@@ -70,37 +70,25 @@ const User = sequelize.define('User', {
 }, {
   tableName: 'users',
   timestamps: true,
-  // ✅ Hash password BEFORE saving to database
   hooks: {
     beforeSave: async (user) => {
       if (user.changed('password')) {
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(user.password, salt);
-        console.log('🔐 Password hashed for user:', user.username);
       }
     }
   }
 });
 
-// ✅ Instance method to compare password
 User.prototype.comparePassword = async function(candidatePassword) {
-  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// models/User.js - Add this method
 User.prototype.updateLastActive = async function() {
   this.lastActive = new Date();
-  return this.save().catch(() => {}); // Non-blocking
+  return this.save().catch(() => {});
 };
-// models/User.js - ADD THIS AT THE BOTTOM
 
-// Message association
-const Message = require('./Message');
-User.hasMany(Message, { 
-  foreignKey: 'senderId', 
-  as: 'sentMessages' 
-});
+// ✅ NO Message associations here - prevents circular dependency
 
-module.exports = User;
 module.exports = User;
