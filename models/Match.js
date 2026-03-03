@@ -1,7 +1,6 @@
-// models/Match.js
+// models/Match.js - NO Message associations here
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
-const User = require('./User');
 
 const Match = sequelize.define('Match', {
   id: {
@@ -12,38 +11,29 @@ const Match = sequelize.define('Match', {
   user1Id: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: { model: User, key: 'id' }
+    field: 'user1Id'
   },
   user2Id: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: { model: User, key: 'id' }
+    field: 'user2Id'
   },
   status: {
-    type: DataTypes.ENUM('pending', 'accepted', 'rejected', 'blocked'),
+    type: DataTypes.STRING,
     defaultValue: 'pending'
   },
   likedBy: {
     type: DataTypes.ARRAY(DataTypes.UUID),
-    defaultValue: []
+    defaultValue: [],
+    field: 'likedBy'
   }
 }, {
   tableName: 'matches',
   timestamps: true,
-  indexes: [{ unique: true, fields: ['user1Id', 'user2Id'] }]
-});
-// Message association
-const Message = require('./Message');
-Match.hasMany(Message, { 
-  foreignKey: 'matchId', 
-  as: 'messages' 
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 });
 
-module.exports = Match;
-// Associations
-User.hasMany(Match, { foreignKey: 'user1Id', as: 'matchesAsUser1' });
-User.hasMany(Match, { foreignKey: 'user2Id', as: 'matchesAsUser2' });
-Match.belongsTo(User, { foreignKey: 'user1Id', as: 'user1' });
-Match.belongsTo(User, { foreignKey: 'user2Id', as: 'user2' });
+// ✅ NO Message associations here - prevents circular dependency
 
 module.exports = Match;
