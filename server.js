@@ -1015,6 +1015,7 @@ app.post('/api/use-token', async (req, res) => {
     message: 'Token used (unlimited mode)'
   });
 });
+
 // 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
@@ -1022,6 +1023,7 @@ app.use((req, res) => {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
     error: { status: 404 }
+  //
   });
 });
 
