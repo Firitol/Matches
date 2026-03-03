@@ -1,122 +1,265 @@
+<!-- views/register.ejs - WITH LIVE AVAILABILITY CHECK -->
 <%- include('partials/header') %>
 
-<div style="max-width:500px;margin:2rem auto;background:#fff;padding:2rem;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1)">
-  <h1 style="text-align:center;color:#26EAED;margin-bottom:1rem">🇪🇹 EthioMatch</h1>
-  <p style="text-align:center;color:#f44336;font-weight:bold;margin-bottom:2rem">⚠️ You must be 18+ to join</p>
+<div class="register-container" style="max-width:500px;margin:2rem auto;padding:0 1rem">
   
-  <form action="/register" method="POST" id="registerForm" style="display:flex;flex-direction:column;gap:1rem">
+  <div style="text-align:center;margin-bottom:2rem">
+    <h1 style="margin:0 0 0.5rem 0;color:#1A1A2E">🇪🇹 Join EthioMatch</h1>
+    <p style="margin:0;color:#6B7280">Find your serious relationship today</p>
+  </div>
+  
+  <!-- Flash Messages -->
+  <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
+    <div style="background:#FEF2F2;color:#991B1B;padding:1rem;border-radius:8px;margin-bottom:1.5rem">
+      <% error.forEach(msg => { %><p style="margin:0.25rem 0"><%= msg %></p><% }) %>
+    </div>
+  <% } %>
+  
+  <!-- Registration Form -->
+  <form action="/register" method="POST" style="background:#fff;padding:2rem;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)" id="registerForm">
     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
     
-    <div>
-      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Username</label>
-      <input type="text" name="username" required minlength="3" maxlength="30" placeholder="Choose a username"
-             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+    <!-- Username with Live Check -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Username *</label>
+      <input type="text" name="username" id="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_]+"
+             placeholder="Choose a username"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem"
+             onblur="checkUsernameAvailability()" oninput="clearUsernameFeedback()">
+      <small id="usernameFeedback" style="display:block;margin-top:0.25rem;font-size:0.875rem"></small>
     </div>
     
-    <div>
-      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Email</label>
-      <input type="email" name="email" required placeholder="your@email.com"
-             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+    <!-- Email with Live Check -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Email *</label>
+      <input type="email" name="email" id="email" required maxlength="100"
+             placeholder="your@email.com"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem"
+             onblur="checkEmailAvailability()" oninput="clearEmailFeedback()">
+      <small id="emailFeedback" style="display:block;margin-top:0.25rem;font-size:0.875rem"></small>
     </div>
     
-    <div>
-      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Password</label>
-      <input type="password" name="password" required minlength="8" placeholder="Min 8 characters"
-             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+    <!-- Password -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Password *</label>
+      <input type="password" name="password" id="password" required minlength="8" maxlength="100"
+             placeholder="At least 8 characters"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem"
+             oninput="checkPasswordStrength()">
+      <small id="passwordFeedback" style="display:block;margin-top:0.25rem;font-size:0.875rem"></small>
     </div>
     
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      <div>
-        <label style="display:block;margin-bottom:0.5rem;font-weight:600">Age ⚠️</label>
-        <input type="number" 
-               name="age" 
-               id="ageInput"
-               required 
-               min="18" 
-               max="100" 
-               step="1"
-               value=""
-               placeholder="25"
-               style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px;font-size:1rem">
-        <small id="ageError" style="color:#f44336;display:none;margin-top:0.25rem">Must be 18-100</small>
-      </div>
-      <div>
-        <label style="display:block;margin-bottom:0.5rem;font-weight:600">Gender</label>
-        <select name="gender" required style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
-          <option value="" disabled selected>Select</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
+    <!-- Age -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Age *</label>
+      <input type="number" name="age" required min="18" max="100"
+             placeholder="Your age"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem">
+      <small style="color:#6B7280;display:block;margin-top:0.25rem">Must be 18-100 years old</small>
     </div>
     
-    <div>
-      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Looking For</label>
-      <select name="lookingFor" required style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
-        <option value="" disabled selected>Select</option>
+    <!-- Gender -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Gender *</label>
+      <select name="gender" required style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem;background:#fff">
+        <option value="">Select your gender</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    
+    <!-- Looking For -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Looking For *</label>
+      <select name="lookingFor" required style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem;background:#fff">
+        <option value="">Select what you're looking for</option>
         <option value="Male">Male</option>
         <option value="Female">Female</option>
         <option value="Both">Both</option>
       </select>
     </div>
     
-    <div>
-      <label style="display:block;margin-bottom:0.5rem;font-weight:600">Location</label>
-      <input type="text" name="location" placeholder="City, Ethiopia" value="Ethiopia"
-             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px">
+    <!-- Location -->
+    <div style="margin-bottom:1.5rem">
+      <label style="display:block;margin-bottom:0.5rem;font-weight:600;color:#1A1A2E">Location</label>
+      <input type="text" name="location" maxlength="100" value="Ethiopia"
+             placeholder="Your city/country"
+             style="width:100%;padding:0.75rem;border:2px solid #e0e0e0;border-radius:8px;font-size:1rem">
     </div>
     
-    <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
-      <input type="checkbox" name="terms" required>
-      <span>I am 18+ and agree to Terms of Service</span>
-    </label>
+    <!-- Terms -->
+    <div style="margin-bottom:2rem">
+      <label style="display:flex;align-items:flex-start;gap:0.75rem;cursor:pointer">
+        <input type="checkbox" name="terms" required style="margin-top:0.25rem;width:1.25rem;height:1.25rem">
+        <span style="font-size:0.9rem;color:#374151">
+          I am 18+ and agree to the <a href="/terms" target="_blank" style="color:#26EAED;text-decoration:none">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:#26EAED;text-decoration:none">Privacy Policy</a>
+        </span>
+      </label>
+    </div>
     
-    <button type="submit" id="submitBtn" style="padding:0.75rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:1rem">
+    <!-- Submit -->
+    <button type="submit" id="submitBtn" style="width:100%;padding:1rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:8px;font-weight:600;font-size:1.1rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background='#1dd1d4'" onmouseout="this.style.background='#26EAED'">
       Create Account
     </button>
+    
+    <p style="text-align:center;margin-top:1.5rem;color:#6B7280">
+      Already have an account? <a href="/login" style="color:#26EAED;text-decoration:none;font-weight:600">Login</a>
+    </p>
   </form>
   
-  <p style="text-align:center;margin-top:1rem">
-    Already have an account? <a href="/login" style="color:#26EAED">Login</a>
-  </p>
 </div>
 
+<!-- Live Validation Script -->
 <script>
-// Client-side validation
-document.getElementById('registerForm').addEventListener('submit', function(e) {
-  const ageInput = document.getElementById('ageInput');
-  const ageError = document.getElementById('ageError');
-  const submitBtn = document.getElementById('submitBtn');
+let usernameCheckTimeout, emailCheckTimeout;
+
+// Check username availability with debounce
+async function checkUsernameAvailability() {
+  const username = document.getElementById('username').value.trim();
+  const feedback = document.getElementById('usernameFeedback');
   
-  const age = parseInt(ageInput.value, 10);
-  
-  console.log('🔍 Form Submit Debug:');
-  console.log('  Age value:', ageInput.value);
-  console.log('  Age parsed:', age);
-  console.log('  Age >= 18:', age >= 18);
-  
-  if (!ageInput.value || isNaN(age) || age < 18 || age > 100) {
-    e.preventDefault();
-    ageError.style.display = 'block';
-    ageError.textContent = 'You must be 18-100 years old (you entered: ' + (ageInput.value || 'empty') + ')';
-    ageInput.focus();
-    ageInput.style.borderColor = '#f44336';
-    return false;
+  if (username.length < 3) {
+    feedback.textContent = 'Username must be at least 3 characters';
+    feedback.style.color = '#dc2626';
+    return;
   }
   
-  // Valid - proceed
-  ageError.style.display = 'none';
-  ageInput.style.borderColor = '#2D6A4F';
+  // Debounce API calls
+  clearTimeout(usernameCheckTimeout);
+  usernameCheckTimeout = setTimeout(async () => {
+    feedback.textContent = '⏳ Checking...';
+    feedback.style.color = '#2563eb';
+    
+    try {
+      const response = await fetch(`/api/check-availability?username=${encodeURIComponent(username)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        if (data.usernameAvailable) {
+          feedback.textContent = '✅ Username available';
+          feedback.style.color = '#16a34a';
+        } else {
+          feedback.textContent = '❌ Username taken';
+          feedback.style.color = '#dc2626';
+        }
+      } else {
+        feedback.textContent = '⚠️ Check failed';
+        feedback.style.color = '#f59e0b';
+      }
+    } catch (error) {
+      console.error('Username check error:', error);
+      feedback.textContent = '⚠️ Network error';
+      feedback.style.color = '#f59e0b';
+    }
+  }, 500);
+}
+
+// Clear username feedback on input
+function clearUsernameFeedback() {
+  const feedback = document.getElementById('usernameFeedback');
+  if (feedback.textContent.startsWith('✅') || feedback.textContent.startsWith('❌')) {
+    feedback.textContent = '';
+  }
+}
+
+// Check email availability with debounce
+async function checkEmailAvailability() {
+  const email = document.getElementById('email').value.trim();
+  const feedback = document.getElementById('emailFeedback');
+  
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    feedback.textContent = 'Please enter a valid email';
+    feedback.style.color = '#dc2626';
+    return;
+  }
+  
+  clearTimeout(emailCheckTimeout);
+  emailCheckTimeout = setTimeout(async () => {
+    feedback.textContent = '⏳ Checking...';
+    feedback.style.color = '#2563eb';
+    
+    try {
+      const response = await fetch(`/api/check-availability?email=${encodeURIComponent(email)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        if (data.emailAvailable) {
+          feedback.textContent = '✅ Email available';
+          feedback.style.color = '#16a34a';
+        } else {
+          feedback.textContent = '❌ Email already registered';
+          feedback.style.color = '#dc2626';
+        }
+      } else {
+        feedback.textContent = '⚠️ Check failed';
+        feedback.style.color = '#f59e0b';
+      }
+    } catch (error) {
+      console.error('Email check error:', error);
+      feedback.textContent = '⚠️ Network error';
+      feedback.style.color = '#f59e0b';
+    }
+  }, 500);
+}
+
+// Clear email feedback on input
+function clearEmailFeedback() {
+  const feedback = document.getElementById('emailFeedback');
+  if (feedback.textContent.startsWith('✅') || feedback.textContent.startsWith('❌')) {
+    feedback.textContent = '';
+  }
+}
+
+// Password strength checker
+function checkPasswordStrength() {
+  const password = document.getElementById('password').value;
+  const feedback = document.getElementById('passwordFeedback');
+  
+  if (password.length < 8) {
+    feedback.textContent = '❌ Too short (min 8 characters)';
+    feedback.style.color = '#dc2626';
+  } else if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+    feedback.textContent = '⚠️ Add uppercase letter and number for stronger password';
+    feedback.style.color = '#f59e0b';
+  } else {
+    feedback.textContent = '✅ Strong password';
+    feedback.style.color = '#16a34a';
+  }
+}
+
+// Prevent form submit if username/email not available
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+  const username = document.getElementById('username').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const submitBtn = document.getElementById('submitBtn');
+  
+  // Quick final check before submit
+  try {
+    const response = await fetch(`/api/check-availability?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}`);
+    const data = await response.json();
+    
+    if (!data.usernameAvailable || !data.emailAvailable) {
+      e.preventDefault();
+      if (!data.usernameAvailable) {
+        document.getElementById('usernameFeedback').textContent = '❌ Username taken - please choose another';
+        document.getElementById('usernameFeedback').style.color = '#dc2626';
+      }
+      if (!data.emailAvailable) {
+        document.getElementById('emailFeedback').textContent = '❌ Email already registered';
+        document.getElementById('emailFeedback').style.color = '#dc2626';
+      }
+      submitBtn.disabled = false;
+      return;
+    }
+  } catch (error) {
+    console.error('Final check error:', error);
+    // Allow submit on error to avoid blocking legitimate registrations
+  }
+  
+  // Show loading state
   submitBtn.disabled = true;
   submitBtn.textContent = 'Creating Account...';
-  submitBtn.style.opacity = '0.7';
-});
-
-// Clear error on input
-document.getElementById('ageInput').addEventListener('input', function() {
-  document.getElementById('ageError').style.display = 'none';
-  this.style.borderColor = '#e0e0e0';
 });
 </script>
 
