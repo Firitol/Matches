@@ -1,4 +1,4 @@
-// models/Message.js
+// models/Message.js - NO ASSOCIATIONS (prevents circular dependency)
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
 
@@ -42,37 +42,6 @@ const Message = sequelize.define('Message', {
   updatedAt: 'updatedAt'
 });
 
-// ✅ IMPORTANT: Define associations INSIDE the Message model file
-// This ensures associations are loaded when Message is required
-
-const setupAssociations = () => {
-  const User = require('./User');
-  const Match = require('./Match');
-  
-  Message.belongsTo(User, { 
-    foreignKey: 'senderId', 
-    as: 'sender',
-    constraints: false
-  });
-  
-  Message.belongsTo(Match, { 
-    foreignKey: 'matchId', 
-    as: 'match',
-    constraints: false
-  });
-  
-  User.hasMany(Message, { 
-    foreignKey: 'senderId', 
-    as: 'sentMessages' 
-  });
-  
-  Match.hasMany(Message, { 
-    foreignKey: 'matchId', 
-    as: 'messages' 
-  });
-};
-
-// Setup associations immediately
-setupAssociations();
+// ✅ NO ASSOCIATIONS HERE - prevents circular dependency
 
 module.exports = Message;
