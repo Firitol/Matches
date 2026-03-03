@@ -1,6 +1,6 @@
-// server.js - EthioMatch FINAL PRODUCTION READY (Persistent Messaging)
+// server.js - EthioMatch FINAL PRODUCTION READY (Profile Photo + Chat Media Upload)
 require('dotenv').config();
-const { User, Match, Message } = require('./models');
+
 // 🔍 GLOBAL ERROR CATCHER
 process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught Exception:', err.message);
@@ -19,7 +19,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const flash = require('express-flash');
-const { Sequelize, Op } = require('sequelize');
+const { Op } = require('sequelize');
 
 const app = express();
 
@@ -33,10 +33,14 @@ const constants = {
 };
 
 // ============================================
-// 🗄️ NEON POSTGRESQL DATABASE CONNECTION
+// 📦 CENTRAL MODELS IMPORT
 // ============================================
 
-let sequelize;
+const { User, Match, Message, sequelize } = require('./models');
+
+// ============================================
+// 🗄️ NEON POSTGRESQL DATABASE CONNECTION
+// ============================================
 
 const connectDB = async () => {
   try {
@@ -52,19 +56,9 @@ const connectDB = async () => {
     if (dbUrl.startsWith('postgresql://')) dbUrl = dbUrl.replace('postgresql://', 'postgres://');
     if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
     
-    sequelize = new Sequelize(dbUrl, {
-      dialect: 'postgres',
-      protocol: 'postgres',
-      logging: process.env.NODE_ENV === 'development' ? console.log : false,
-      dialectOptions: {
-        ssl: { require: true, rejectUnauthorized: false }
-      },
-      pool: { max: 5, min: 0, acquire: 30000, idle: 10000 },
-      retry: { match: [/Deadlock/i, /Transaction/i, /Connection/i], max: 3 }
-    });
-    
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
+    
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
     
@@ -281,8 +275,6 @@ app.post('/login', async (req, res) => {
       return res.redirect('/login');
     }
     
-    const User = require('./models/User');
-    
     const user = await User.findOne({
       where: {
         [Op.or]: [
@@ -378,7 +370,7 @@ app.post('/register', async (req, res) => {
       req.flash('error', 'You must agree to the Terms of Service');
       return res.redirect('/register');
     }
-   
+    
     const existing = await User.findOne({
       where: {
         [Op.or]: [
@@ -439,7 +431,7 @@ app.get('/dashboard', async (req, res) => {
       req.flash('error', 'Please login to continue');
       return res.redirect('/login');
     }
- 
+    
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
@@ -530,8 +522,6 @@ app.get('/profile', async (req, res) => {
       return res.redirect('/login');
     }
     
-    const User = require('./models/User');
-    
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
@@ -565,7 +555,7 @@ app.get('/profile', async (req, res) => {
   }
 });
 
-// 👤 Profile POST
+// 👤 Profile POST - Update Profile Info
 app.post('/profile', async (req, res) => {
   try {
     if (!req.session.userId) {
@@ -573,10 +563,9 @@ app.post('/profile', async (req, res) => {
       return res.redirect('/login');
     }
     
-    const { bio, location, interests, profileImage } = req.body;
-    const User = require('./models/User');
-    
+    const { bio, location, interests } = req.body;
     const user = await User.findByPk(req.session.userId);
+    
     if (!user) {
       req.session.destroy();
       return res.redirect('/login');
@@ -591,10 +580,6 @@ app.post('/profile', async (req, res) => {
         .map(i => i.trim())
         .filter(i => i.length > 0)
         .slice(0, 20);
-    }
-    
-    if (profileImage !== undefined && profileImage.startsWith('http')) {
-      user.profileImage = profileImage.substring(0, 255);
     }
     
     await user.save();
@@ -622,6 +607,56 @@ app.post('/profile', async (req, res) => {
     res.redirect('/profile');
   }
 });
+
+// 📸 Profile Photo Upload
+const { upload, uploadToCloudinaryMiddleware } = require('./middleware/upload');
+
+app.post('/profile/upload-photo', 
+  upload.single('profilePhoto'),
+  uploadToCloudinaryMiddleware,
+  async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    try {
+      if (!req.cloudinaryResult) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+      
+      const user = await User.findByPk(req.session.userId);
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      
+      // Delete old profile image from Cloudinary (if exists)
+      if (user.profileImagePublicId) {
+        const { deleteFromCloudinary } = require('./lib/cloudinary');
+        await deleteFromCloudinary(user.profileImagePublicId).catch(() => {});
+      }
+      
+      // Update user with new profile image
+      user.profileImage = req.cloudinaryResult.url;
+      user.profileImagePublicId = req.cloudinaryResult.publicId;
+      await user.save();
+      
+      // Update session
+      req.session.user.profileImage = user.profileImage;
+      
+      console.log(`📸 Profile photo updated for ${user.username}`);
+      
+      res.json({
+        success: true,
+        message: 'Profile photo updated successfully!',
+        profileImage: user.profileImage
+      });
+      
+    } catch (error) {
+      console.error('Profile photo upload error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to upload profile photo' });
+    }
+  }
+);
 
 // 💕 Matches List
 app.get('/matches', async (req, res) => {
@@ -663,7 +698,6 @@ app.post('/like/:userId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot like yourself' });
     }
     
-   
     let match = await Match.findOne({
       where: {
         [Op.or]: [
@@ -758,6 +792,7 @@ app.post('/likes/:matchId/accept', async (req, res) => {
   
   try {
     const { matchId } = req.params;
+    
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -802,6 +837,7 @@ app.post('/likes/:matchId/reject', async (req, res) => {
   
   try {
     const { matchId } = req.params;
+    
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -874,14 +910,13 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room - FIXED (uses central models)
+// 💬 Chat Room - WITH MEDIA SUPPORT
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
     
     const { matchId } = req.params;
     
-    // ✅ Use centrally imported models
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -902,14 +937,12 @@ app.get('/messages/:matchId', async (req, res) => {
       return res.redirect('/matches');
     }
     
-    // ✅ Fetch messages
     const messages = await Message.findAll({
       where: { matchId: matchId },
       order: [['createdAt', 'ASC']],
       limit: 100
     });
     
-    // ✅ Get sender info for each message
     const messagesWithSender = await Promise.all(
       messages.map(async (msg) => {
         const sender = await User.findByPk(msg.senderId, {
@@ -920,13 +953,14 @@ app.get('/messages/:matchId', async (req, res) => {
           content: msg.content,
           senderId: msg.senderId,
           senderName: sender?.username || 'Unknown',
+          mediaType: msg.mediaType,
+          mediaUrl: msg.mediaUrl,
           createdAt: msg.createdAt,
           isRead: msg.isRead
         };
       })
     );
     
-    // Mark messages as read
     await Message.update(
       { isRead: true, readAt: new Date() },
       {
@@ -938,7 +972,6 @@ app.get('/messages/:matchId', async (req, res) => {
       }
     );
     
-    // Get other user
     const otherUserId = match.user1Id === req.session.userId ? match.user2Id : match.user1Id;
     const otherUser = await User.findByPk(otherUserId, {
       attributes: ['id', 'username', 'profileImage']
@@ -969,7 +1002,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// 💬 Send Message - FIXED
+// 💬 Send Text Message
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -998,64 +1031,8 @@ app.post('/messages/:matchId/send', async (req, res) => {
     const message = await Message.create({
       matchId: matchId,
       senderId: req.session.userId,
-      content: content.trim().substring(0, 1000)
-    });
-    
-    console.log(`📝 Message saved: ${req.session.username} → match ${matchId}`);
-    
-    await match.update({ updatedAt: new Date() });
-    
-    res.json({
-      success: true,
-      message: 'Message sent!',
-       {
-        id: message.id,
-        content: message.content,
-        senderId: message.senderId,
-        senderName: req.session.username,
-        createdAt: message.createdAt,
-        isRead: message.isRead
-      }
-    });
-    
-  } catch (error) {
-    console.error('Send message error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to send message' });
-  }
-});
-
-// 💬 Send Message - NOW SAVES TO DATABASE
-app.post('/messages/:matchId/send', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    const { matchId } = req.params;
-    const { content } = req.body;
-    
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ success: false, message: 'Message cannot be empty' });
-    }
-   
-    
-    const match = await Match.findOne({
-      where: {
-        id: matchId,
-        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
-        status: 'accepted'
-      }
-    });
-    
-    if (!match) {
-      return res.status(404).json({ success: false, message: 'Conversation not found' });
-    }
-    
-    // ✅ Save message to database
-    const message = await Message.create({
-      matchId: matchId,
-      senderId: req.session.userId,
-      content: content.trim().substring(0, 1000)
+      content: content.trim().substring(0, 1000),
+      mediaType: 'text'
     });
     
     console.log(`📝 Message saved: ${req.session.username} → match ${matchId}`);
@@ -1070,6 +1047,8 @@ app.post('/messages/:matchId/send', async (req, res) => {
         content: message.content,
         senderId: message.senderId,
         senderName: req.session.username,
+        mediaType: message.mediaType,
+        mediaUrl: message.mediaUrl,
         createdAt: message.createdAt,
         isRead: message.isRead
       }
@@ -1080,6 +1059,69 @@ app.post('/messages/:matchId/send', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to send message' });
   }
 });
+
+// 📸 Send Media Message (Image/Video)
+app.post('/messages/:matchId/send-media', 
+  upload.single('media'),
+  uploadToCloudinaryMiddleware,
+  async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    try {
+      const { matchId } = req.params;
+      const { caption } = req.body;
+      
+      if (!req.cloudinaryResult) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+      
+      const match = await Match.findOne({
+        where: {
+          id: matchId,
+          [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
+          status: 'accepted'
+        }
+      });
+      
+      if (!match) {
+        return res.status(404).json({ success: false, message: 'Conversation not found' });
+      }
+      
+      const message = await Message.create({
+        matchId: matchId,
+        senderId: req.session.userId,
+        content: caption ? caption.trim().substring(0, 1000) : null,
+        mediaType: req.cloudinaryResult.mediaType,
+        mediaUrl: req.cloudinaryResult.url
+      });
+      
+      console.log(`📸 Media message sent: ${req.session.username} → match ${matchId}`);
+      
+      await match.update({ updatedAt: new Date() });
+      
+      res.json({
+        success: true,
+        message: 'Media sent!',
+        data: {
+          id: message.id,
+          content: message.content,
+          senderId: message.senderId,
+          senderName: req.session.username,
+          mediaType: message.mediaType,
+          mediaUrl: message.mediaUrl,
+          createdAt: message.createdAt,
+          isRead: message.isRead
+        }
+      });
+      
+    } catch (error) {
+      console.error('Send media error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to send media' });
+    }
+  }
+);
 
 // ❌ 404 Handler
 app.use((req, res) => {
