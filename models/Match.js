@@ -32,7 +32,14 @@ const Match = sequelize.define('Match', {
   timestamps: true,
   indexes: [{ unique: true, fields: ['user1Id', 'user2Id'] }]
 });
+// Message association
+const Message = require('./Message');
+Match.hasMany(Message, { 
+  foreignKey: 'matchId', 
+  as: 'messages' 
+});
 
+module.exports = Match;
 // Associations
 User.hasMany(Match, { foreignKey: 'user1Id', as: 'matchesAsUser1' });
 User.hasMany(Match, { foreignKey: 'user2Id', as: 'matchesAsUser2' });
