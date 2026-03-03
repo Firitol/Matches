@@ -22,7 +22,7 @@ const Message = sequelize.define('Message', {
     type: DataTypes.TEXT,
     allowNull: false,
     validate: {
-      len: [1, 1000]
+      len: [1, 1000] // Max 1000 characters
     }
   },
   isRead: {
