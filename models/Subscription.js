@@ -18,10 +18,7 @@ const Subscription = sequelize.define('Subscription', {
     type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'free',
-    field: 'planType',
-    validate: {
-      isIn: [['free', 'basic', 'premium', 'vip']]
-    }
+    field: 'planType'
   },
   stripeSubscriptionId: {
     type: DataTypes.STRING,
