@@ -93,5 +93,14 @@ User.prototype.updateLastActive = async function() {
   this.lastActive = new Date();
   return this.save().catch(() => {}); // Non-blocking
 };
+// models/User.js - ADD THIS AT THE BOTTOM
 
+// Message association
+const Message = require('./Message');
+User.hasMany(Message, { 
+  foreignKey: 'senderId', 
+  as: 'sentMessages' 
+});
+
+module.exports = User;
 module.exports = User;
