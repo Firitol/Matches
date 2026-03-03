@@ -25,8 +25,7 @@ const Payment = sequelize.define('Payment', {
   },
   amount: {
     type: DataTypes.INTEGER,
-    allowNull: false,
-    validate: { min: 0 }
+    allowNull: false
   },
   currency: {
     type: DataTypes.STRING,
@@ -34,18 +33,12 @@ const Payment = sequelize.define('Payment', {
   },
   status: {
     type: DataTypes.STRING,
-    defaultValue: 'pending',
-    validate: {
-      isIn: [['pending', 'completed', 'failed', 'refunded']]
-    }
+    defaultValue: 'pending'
   },
   paymentType: {
     type: DataTypes.STRING,
     allowNull: false,
-    field: 'paymentType',
-    validate: {
-      isIn: [['subscription', 'tokens']]
-    }
+    field: 'paymentType'
   },
   metadata: {
     type: DataTypes.JSONB,
