@@ -1177,10 +1177,11 @@ app.post('/messages/:matchId/send-media',
   }
 );
 // ============================================
+// ============================================
 // 💎 PREMIUM & PAYMENT ROUTES
 // ============================================
 
-const { PLANS, TOKEN_PACKAGES, createCheckoutSession, getStripeCustomer, createStripeCustomer, verifyWebhookSignature } = require('./lib/stripe');
+const { PLANS, TOKEN_PACKAGES, createCheckoutSession, getStripeCustomer, createStripeCustomer } = require('./lib/stripe');
 const { Subscription, MessageToken, Payment } = require('./models');
 
 // 💎 Premium Page
@@ -1190,13 +1191,8 @@ app.get('/premium', async (req, res) => {
     let userTokens = null;
     
     if (req.session.userId) {
-      userSubscription = await Subscription.findOne({
-        where: { userId: req.session.userId }
-      });
-      
-      userTokens = await MessageToken.findOne({
-        where: { userId: req.session.userId }
-      });
+      userSubscription = await Subscription.findOne({ where: { userId: req.session.userId } });
+      userTokens = await MessageToken.findOne({ where: { userId: req.session.userId } });
     }
     
     res.render('premium', {
@@ -1207,7 +1203,6 @@ app.get('/premium', async (req, res) => {
       userTokens: userTokens ? userTokens.toJSON() : null,
       currentUser: req.session.user || null
     });
-    
   } catch (error) {
     console.error('Premium page error:', error.message);
     res.redirect('/dashboard');
@@ -1234,43 +1229,24 @@ app.post('/payment/create-checkout', async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     
-    // Create or get Stripe customer
-    let stripeCustomer = await getStripeCustomer(user.email);
-    
-    if (!stripeCustomer) {
-      stripeCustomer = await createStripeCustomer({
-        email: user.email,
-        name: user.username,
-        userId: user.id
-      });
-      
-      // Update subscription with Stripe customer ID
-      await Subscription.update(
-        { stripeCustomerId: stripeCustomer.id },
-        { where: { userId: user.id } }
-      );
-    }
-    
-    // Create checkout session
     const { sessionId, url } = await createCheckoutSession({
       userId: user.id,
       email: user.email,
-      planType,
-      tokenAmount
+      planType: planType,
+      tokenAmount: tokenAmount
     });
     
-    // Create pending payment record
     await Payment.create({
       userId: user.id,
       stripeCheckoutSessionId: sessionId,
-      amount: planType ? PLANS[planType]?.price : TOKEN_PACKAGES[tokenAmount]?.price || 0,
+      amount: planType ? PLANS[planType].price : TOKEN_PACKAGES[tokenAmount].price,
       currency: 'usd',
       status: 'pending',
       paymentType: planType ? 'subscription' : 'tokens',
-      metadata: { planType, tokenAmount }
+      metadata: { planType: planType, tokenAmount: tokenAmount }
     });
     
-    res.json({ success: true, url });
+    res.json({ success: true, url: url });
     
   } catch (error) {
     console.error('Checkout error:', error.message);
@@ -1296,40 +1272,36 @@ app.get('/payment/success', async (req, res) => {
       const metadata = session.metadata;
       
       if (metadata.planType && metadata.planType !== 'tokens') {
-        // Subscription activated
         await Subscription.update(
           {
             planType: metadata.planType,
             status: 'active',
             stripeSubscriptionId: session.subscription,
             currentPeriodStart: new Date(),
-            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
           },
-          { where: { userId } }
+          { where: { userId: userId } }
         );
         
-        // Update token allowance
         const plan = PLANS[metadata.planType];
         await MessageToken.update(
           { tokens: plan.tokensPerDay, tokensUsed: 0, lastRefill: new Date() },
-          { where: { userId } }
+          { where: { userId: userId } }
         );
         
-        req.flash('success', `🎉 Premium ${metadata.planType} activated! Enjoy unlimited features!`);
+        req.flash('success', 'Premium ' + metadata.planType + ' activated!');
       } else if (metadata.tokenAmount) {
-        // Tokens purchased
         const tokenAmount = parseInt(metadata.tokenAmount);
         await MessageToken.upsert({
-          userId,
+          userId: userId,
           tokens: tokenAmount,
           tokensUsed: 0,
           lastRefill: new Date()
         });
         
-        req.flash('success', `🪙 ${tokenAmount} tokens added to your account!`);
+        req.flash('success', tokenAmount + ' tokens added!');
       }
       
-      // Update payment record
       await Payment.update(
         { status: 'completed', stripePaymentIntentId: session.payment_intent },
         { where: { stripeCheckoutSessionId: session_id } }
@@ -1345,77 +1317,6 @@ app.get('/payment/success', async (req, res) => {
   }
 });
 
-// 📡 Stripe Webhook (for subscription events)
-app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
-  const signature = req.headers['stripe-signature'];
-  
-  try {
-    const event = verifyWebhookSignature(
-      signature,
-      req.body,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-    
-    if (!event) {
-      return res.status(400).json({ error: 'Invalid webhook signature' });
-    }
-    
-    const { type, data } = event;
-    const subscription = data.object;
-    const userId = subscription?.metadata?.userId;
-    
-    switch (type) {
-      case 'customer.subscription.updated':
-        if (userId) {
-          await Subscription.update(
-            {
-              status: subscription.status,
-              currentPeriodStart: new Date(subscription.current_period_start * 1000),
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-              cancelAtPeriodEnd: subscription.cancel_at_period_end
-            },
-            { where: { userId } }
-          );
-        }
-        break;
-        
-      case 'customer.subscription.deleted':
-        if (userId) {
-          await Subscription.update(
-            {
-              planType: 'free',
-              status: 'canceled',
-              canceledAt: new Date()
-            },
-            { where: { userId } }
-          );
-          
-          // Reset to free token allowance
-          await MessageToken.update(
-            { tokens: 5, tokensUsed: 0 },
-            { where: { userId } }
-          );
-        }
-        break;
-        
-      case 'invoice.payment_failed':
-        if (userId) {
-          await Subscription.update(
-            { status: 'past_due' },
-            { where: { userId } }
-          );
-        }
-        break;
-    }
-    
-    res.json({ received: true });
-    
-  } catch (error) {
-    console.error('Webhook error:', error.message);
-    res.status(500).json({ error: 'Webhook handler failed' });
-  }
-});
-
 // 🪙 Check Token Balance API
 app.get('/api/token-balance', async (req, res) => {
   if (!req.session.userId) {
@@ -1423,12 +1324,7 @@ app.get('/api/token-balance', async (req, res) => {
   }
   
   try {
-    const MessageToken = require('./models').MessageToken;
-    const Subscription = require('./models').Subscription;
-    
-    let tokens = await MessageToken.findOne({
-      where: { userId: req.session.userId }
-    });
+    let tokens = await MessageToken.findOne({ where: { userId: req.session.userId } });
     
     if (!tokens) {
       tokens = await MessageToken.create({
@@ -1438,17 +1334,14 @@ app.get('/api/token-balance', async (req, res) => {
       });
     }
     
-    // Get subscription to show plan info
-    const subscription = await Subscription.findOne({
-      where: { userId: req.session.userId }
-    });
+    const subscription = await Subscription.findOne({ where: { userId: req.session.userId } });
     
     res.json({
       success: true,
       tokens: tokens.tokens - tokens.tokensUsed,
       totalTokens: tokens.tokens,
       tokensUsed: tokens.tokensUsed,
-      planType: subscription?.planType || 'free',
+      planType: subscription ? subscription.planType : 'free',
       lastRefill: tokens.lastRefill
     });
     
@@ -1458,32 +1351,23 @@ app.get('/api/token-balance', async (req, res) => {
   }
 });
 
-// 🪙 Use Token (when sending message)
+// 🪙 Use Token API
 app.post('/api/use-token', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   
   try {
-    const MessageToken = require('./models').MessageToken;
-    const Subscription = require('./models').Subscription;
+    const tokens = await MessageToken.findOne({ where: { userId: req.session.userId } });
+    const subscription = await Subscription.findOne({ where: { userId: req.session.userId } });
     
-    const tokens = await MessageToken.findOne({
-      where: { userId: req.session.userId }
-    });
-    
-    const subscription = await Subscription.findOne({
-      where: { userId: req.session.userId }
-    });
-    
-    // Premium/VIP users have unlimited tokens
-    if (subscription?.planType === 'premium' || subscription?.planType === 'vip') {
+    if (subscription && (subscription.planType === 'premium' || subscription.planType === 'vip')) {
       return res.json({ success: true, tokens: 999, message: 'Unlimited tokens (Premium)' });
     }
     
     if (!tokens || tokens.tokens - tokens.tokensUsed <= 0) {
-      return res.status(402).json({ 
-        success: false, 
+      return res.status(402).json({
+        success: false,
         message: 'No tokens available. Please purchase more or upgrade to Premium.',
         tokens: 0
       });
@@ -1503,72 +1387,6 @@ app.post('/api/use-token', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to use token' });
   }
 });
-
-// 💳 Payment History
-app.get('/payments', async (req, res) => {
-  if (!req.session.userId) {
-    return res.redirect('/login');
-  }
-  
-  try {
-    const Payment = require('./models').Payment;
-    
-    const payments = await Payment.findAll({
-      where: { userId: req.session.userId },
-      order: [['createdAt', 'DESC']],
-      limit: 20
-    });
-    
-    res.render('payments', {
-      title: 'Payment History',
-      payments: payments.map(p => p.toJSON())
-    });
-    
-  } catch (error) {
-    console.error('Payment history error:', error.message);
-    res.redirect('/dashboard');
-  }
-});
-
-// 🚫 Cancel Subscription
-app.post('/subscription/cancel', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    const Subscription = require('./models').Subscription;
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-    
-    const subscription = await Subscription.findOne({
-      where: { userId: req.session.userId }
-    });
-    
-    if (!subscription?.stripeSubscriptionId) {
-      return res.status(400).json({ success: false, message: 'No active subscription' });
-    }
-    
-    // Cancel at period end (user keeps access until end of billing period)
-    await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-      cancel_at_period_end: true
-    });
-    
-    await Subscription.update(
-      { cancelAtPeriodEnd: true },
-      { where: { userId: req.session.userId } }
-    );
-    
-    res.json({ 
-      success: true, 
-      message: 'Subscription will cancel at end of billing period' 
-    });
-    
-  } catch (error) {
-    console.error('Cancel subscription error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to cancel subscription' });
-  }
-});
-
 // ❌ 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
