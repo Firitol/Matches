@@ -1,8 +1,6 @@
 // models/Message.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
-const User = require('./User');
-const Match = require('./Match');
 
 const Message = sequelize.define('Message', {
   id: {
@@ -13,48 +11,35 @@ const Message = sequelize.define('Message', {
   matchId: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: {
-      model: Match,
-      key: 'id'
-    }
+    field: 'matchId'
   },
   senderId: {
     type: DataTypes.UUID,
     allowNull: false,
-    references: {
-      model: User,
-      key: 'id'
-    }
+    field: 'senderId'
   },
   content: {
     type: DataTypes.TEXT,
     allowNull: false,
     validate: {
-      len: [1, 1000] // Max 1000 characters
+      len: [1, 1000]
     }
   },
   isRead: {
     type: DataTypes.BOOLEAN,
-    defaultValue: false
+    defaultValue: false,
+    field: 'isRead'
   },
   readAt: {
     type: DataTypes.DATE,
-    allowNull: true
+    allowNull: true,
+    field: 'readAt'
   }
 }, {
   tableName: 'messages',
   timestamps: true,
-  indexes: [
-    { fields: ['matchId'] },
-    { fields: ['senderId'] },
-    { fields: ['createdAt'] }
-  ]
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 });
-
-// Associations
-Message.belongsTo(Match, { foreignKey: 'matchId', as: 'match' });
-Message.belongsTo(User, { foreignKey: 'senderId', as: 'sender' });
-Match.hasMany(Message, { foreignKey: 'matchId', as: 'messages' });
-User.hasMany(Message, { foreignKey: 'senderId', as: 'sentMessages' });
 
 module.exports = Message;
