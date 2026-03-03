@@ -14,7 +14,6 @@
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.0",
     "connect-pg-simple": "^9.0.1",
-    "csrf-csrf": "^3.0.3",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
@@ -37,7 +36,15 @@
   "engines": {
     "node": "20.x"
   },
-  "keywords": ["dating", "ethiopia", "relationships", "18+", "vercel", "neon", "premium"],
+  "keywords": [
+    "dating",
+    "ethiopia",
+    "relationships",
+    "18+",
+    "vercel",
+    "neon",
+    "cloudinary"
+  ],
   "author": "EthioMatch Team",
   "license": "MIT"
 }
