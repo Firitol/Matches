@@ -979,7 +979,42 @@ app.post('/messages/:matchId/send-media',
     }
   }
 );
+// ============================================
+// 🪙 SIMPLE TOKEN API ROUTES (No Premium Logic)
+// ============================================
 
+// Get Token Balance - Always returns "unlimited" for now
+app.get('/api/token-balance', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  // For now, all users have unlimited tokens
+  // You can add premium logic here later
+  res.json({
+    success: true,
+    tokens: 999,  // Unlimited
+    totalTokens: 999,
+    tokensUsed: 0,
+    planType: 'free',  // Can be updated later
+    lastRefill: new Date(),
+    message: 'Unlimited messages enabled'
+  });
+});
+
+// Use Token - Always succeeds for now
+app.post('/api/use-token', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  // For now, always allow message sending
+  res.json({
+    success: true,
+    tokens: 999,  // Unlimited
+    message: 'Token used (unlimited mode)'
+  });
+});
 // 404 Handler
 app.use((req, res) => {
   if (res.headersSent) return;
