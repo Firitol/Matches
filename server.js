@@ -26,7 +26,7 @@ const constants = {
   APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
 };
 
-const { User, Match, Message, Subscription, MessageToken, Payment, sequelize } = require('./models');
+const { User, Match, Message, sequelize } = require('./models');
 
 // Database Connection
 const connectDB = async () => {
