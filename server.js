@@ -1,4 +1,4 @@
-// server.js - EthioMatch FINAL PRODUCTION READY (Vercel + Neon + Match/Messaging Fixed)
+// server.js - EthioMatch FINAL PRODUCTION READY (Persistent Messaging)
 require('dotenv').config();
 
 // 🔍 GLOBAL ERROR CATCHER
@@ -24,7 +24,7 @@ const { Sequelize, Op } = require('sequelize');
 const app = express();
 
 // ============================================
-// 🌍 CONSTANTS (Define BEFORE use)
+// 🌍 CONSTANTS
 // ============================================
 
 const constants = {
@@ -45,7 +45,6 @@ const connectDB = async () => {
       return null;
     }
     
-    // Clean connection string
     let dbUrl = process.env.DATABASE_URL.trim();
     if (dbUrl.startsWith('"') && dbUrl.endsWith('"')) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
@@ -66,7 +65,6 @@ const connectDB = async () => {
     
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
-    
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synced');
     
@@ -77,11 +75,10 @@ const connectDB = async () => {
   }
 };
 
-// Initialize database on startup
 connectDB();
 
 // ============================================
-// 📦 SESSION CONFIGURATION - VERCEL COMPATIBLE
+// 📦 SESSION CONFIGURATION
 // ============================================
 
 const isPreview = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_URL?.includes('vercel.app');
@@ -194,33 +191,27 @@ app.use(flash());
 // ============================================
 
 app.use(async (req, res, next) => {
-  // User & flash messages
   res.locals.user = req.session.user || null;
   res.locals.success = req.flash('success');
   res.locals.error = req.flash('error');
   res.locals.warning = req.flash('warning');
   res.locals.info = req.flash('info');
-  
-  // App constants
   res.locals.appName = constants.APP_NAME;
   res.locals.currentYear = new Date().getFullYear();
   res.locals.constants = constants;
   
-  // ✅ Helper: Format dates
   res.locals.formatDate = (date) => {
     if (!date) return '';
     return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric'
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
   };
   
-  // ✅ Helper: Truncate text
   res.locals.truncateText = (text, length) => {
     if (!text) return '';
     return text.length > length ? text.substring(0, length) + '...' : text;
   };
   
-  // ✅ Helper: Get avatar emoji from username
   res.locals.getAvatarEmoji = (username) => {
     if (!username) return '👤';
     const emojis = ['😀', '😊', '🥰', '😎', '🤩', '🙋', '💁', '👩', '👨', '🧑', '🦁', '🐘', '🦒', '🦓', '🐆'];
@@ -228,7 +219,6 @@ app.use(async (req, res, next) => {
     return emojis[index];
   };
   
-  // ✅ Helper: Check if user is online
   res.locals.isOnline = (lastActive) => {
     if (!lastActive) return false;
     const minutesAgo = (Date.now() - new Date(lastActive).getTime()) / (1000 * 60);
@@ -638,39 +628,6 @@ app.post('/profile', async (req, res) => {
   }
 });
 
-// Profile Image Upload
-app.post('/profile/upload-image', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    const { imageUrl } = req.body;
-    
-    if (!imageUrl || !imageUrl.startsWith('http')) {
-      return res.status(400).json({ success: false, message: 'Invalid image URL' });
-    }
-    
-    const User = require('./models/User');
-    const user = await User.findByPk(req.session.userId);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    user.profileImage = imageUrl.substring(0, 255);
-    await user.save();
-    
-    req.session.user.profileImage = user.profileImage;
-    
-    res.json({ success: true, message: 'Profile image updated', imageUrl: user.profileImage });
-    
-  } catch (error) {
-    console.error('Image upload error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to upload image' });
-  }
-});
-
 // 💕 Matches List
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
@@ -700,7 +657,7 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// ❤️ Like User - FIXED: Properly handles mutual likes → accepted matches
+// ❤️ Like User
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -710,14 +667,12 @@ app.post('/like/:userId', async (req, res) => {
     const { userId } = req.params;
     const currentUserId = req.session.userId;
     
-    // Prevent self-like
     if (userId === currentUserId) {
       return res.status(400).json({ success: false, message: 'Cannot like yourself' });
     }
     
     const Match = require('./models/Match');
     
-    // Check if match already exists (in either direction)
     let match = await Match.findOne({
       where: {
         [Op.or]: [
@@ -728,7 +683,6 @@ app.post('/like/:userId', async (req, res) => {
     });
     
     if (!match) {
-      // Create new pending match
       match = await Match.create({
         user1Id: currentUserId,
         user2Id: userId,
@@ -737,7 +691,6 @@ app.post('/like/:userId', async (req, res) => {
       });
       console.log(`💕 New pending match: ${currentUserId} → ${userId}`);
     } else {
-      // Add current user to likedBy if not already there
       if (!match.likedBy?.includes(currentUserId)) {
         match.likedBy.push(currentUserId);
         await match.save();
@@ -745,7 +698,6 @@ app.post('/like/:userId', async (req, res) => {
       }
     }
     
-    // ✅ CRITICAL: Check if BOTH users have liked each other → accept the match
     const isMutualLike = match.likedBy?.includes(currentUserId) && match.likedBy?.includes(userId);
     
     if (isMutualLike && match.status !== 'accepted') {
@@ -769,7 +721,7 @@ app.post('/like/:userId', async (req, res) => {
   }
 });
 
-// 💕 Pending Likes - View and Accept/Reject
+// 💕 Pending Likes
 app.get('/likes/pending', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
@@ -777,23 +729,18 @@ app.get('/likes/pending', async (req, res) => {
     const Match = require('./models/Match');
     const User = require('./models/User');
     
-    // Find matches where current user was liked but hasn't responded
     const pendingLikes = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
         status: 'pending'
       },
       include: [
-        { 
-          model: User, 
-          as: req.session.userId ? 'user1' : 'user2', // Simplified - adjust as needed
-          attributes: ['id', 'username', 'age', 'profileImage', 'bio'] 
-        }
+        { model: User, as: 'user1', attributes: ['id', 'username', 'age', 'profileImage', 'bio'] },
+        { model: User, as: 'user2', attributes: ['id', 'username', 'age', 'profileImage', 'bio'] }
       ],
       order: [['createdAt', 'DESC']]
     });
     
-    // Transform for template
     const transformedLikes = pendingLikes.map(match => {
       const isUser1 = match.user1Id === req.session.userId;
       const otherUser = isUser1 ? match.user2 : match.user1;
@@ -815,7 +762,7 @@ app.get('/likes/pending', async (req, res) => {
   }
 });
 
-// ✅ Accept a pending like → create accepted match
+// ✅ Accept Like
 app.post('/likes/:matchId/accept', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -840,12 +787,10 @@ app.post('/likes/:matchId/accept', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Like not found' });
     }
     
-    // Add current user to likedBy if not already there
     if (!match.likedBy?.includes(req.session.userId)) {
       match.likedBy.push(req.session.userId);
     }
     
-    // ✅ Accept the match
     match.status = 'accepted';
     await match.save();
     
@@ -863,7 +808,7 @@ app.post('/likes/:matchId/accept', async (req, res) => {
   }
 });
 
-// ❌ Reject a pending like
+// ❌ Reject Like
 app.post('/likes/:matchId/reject', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -888,7 +833,6 @@ app.post('/likes/:matchId/reject', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Like not found' });
     }
     
-    // Delete the pending match
     await match.destroy();
     
     console.log(`❌ Match ${matchId} rejected by user ${req.session.userId}`);
@@ -949,16 +893,16 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room - IMPROVED error handling
+// 💬 Chat Room - NOW FETCHES SAVED MESSAGES
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
     
     const { matchId } = req.params;
     const Match = require('./models/Match');
+    const Message = require('./models/Message');
     const User = require('./models/User');
     
-    // Find match (allow pending for debugging, but only accepted for chat)
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -978,11 +922,32 @@ app.get('/messages/:matchId', async (req, res) => {
       return res.redirect('/messages');
     }
     
-    // 🔐 Only allow chatting if match is accepted
     if (match.status !== 'accepted') {
       req.flash('info', `Wait for ${match.status === 'pending' ? 'mutual like' : 'match approval'} to start chatting`);
       return res.redirect('/matches');
     }
+    
+    // ✅ Fetch all messages for this match
+    const messages = await Message.findAll({
+      where: { matchId: matchId },
+      include: [
+        { model: User, as: 'sender', attributes: ['id', 'username', 'profileImage'] }
+      ],
+      order: [['createdAt', 'ASC']],
+      limit: 100
+    });
+    
+    // Mark messages as read (from other user)
+    await Message.update(
+      { isRead: true, readAt: new Date() },
+      {
+        where: {
+          matchId: matchId,
+          senderId: { [Op.ne]: req.session.userId },
+          isRead: false
+        }
+      }
+    );
     
     const otherUser = match.user1Id === req.session.userId ? match.user2 : match.user1;
     
@@ -997,7 +962,14 @@ app.get('/messages/:matchId', async (req, res) => {
           profileImage: otherUser.profileImage
         }
       },
-      messages: [], // TODO: Implement Message model
+      messages: messages.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        senderId: msg.senderId,
+        senderName: msg.sender?.username,
+        createdAt: msg.createdAt,
+        isRead: msg.isRead
+      })),
       currentUser: {
         id: req.session.userId,
         username: req.session.username
@@ -1010,7 +982,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// 💬 Send Message
+// 💬 Send Message - NOW SAVES TO DATABASE
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -1025,6 +997,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
     }
     
     const Match = require('./models/Match');
+    const Message = require('./models/Message');
     
     const match = await Match.findOne({
       where: {
@@ -1038,16 +1011,27 @@ app.post('/messages/:matchId/send', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
     
-    console.log(`📝 Message from ${req.session.username} to match ${matchId}:`, content.trim());
+    // ✅ Save message to database
+    const message = await Message.create({
+      matchId: matchId,
+      senderId: req.session.userId,
+      content: content.trim().substring(0, 1000)
+    });
+    
+    console.log(`📝 Message saved: ${req.session.username} → match ${matchId}`);
+    
+    await match.update({ updatedAt: new Date() });
     
     res.json({
       success: true,
       message: 'Message sent!',
       data: {
-        id: Date.now().toString(),
-        content: content.trim(),
-        senderId: req.session.userId,
-        createdAt: new Date().toISOString()
+        id: message.id,
+        content: message.content,
+        senderId: message.senderId,
+        senderName: req.session.username,
+        createdAt: message.createdAt,
+        isRead: message.isRead
       }
     });
     
@@ -1101,7 +1085,6 @@ const server = app.listen(PORT, () => {
   console.log(`🔧 Session Store: ${useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'}`);
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
