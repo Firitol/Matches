@@ -17,15 +17,13 @@ const MessageToken = sequelize.define('MessageToken', {
   tokens: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    defaultValue: 0,
-    validate: { min: 0 }
+    defaultValue: 0
   },
   tokensUsed: {
     type: DataTypes.INTEGER,
     allowNull: false,
     defaultValue: 0,
-    field: 'tokensUsed',
-    validate: { min: 0 }
+    field: 'tokensUsed'
   },
   lastRefill: {
     type: DataTypes.DATE,
@@ -37,26 +35,7 @@ const MessageToken = sequelize.define('MessageToken', {
   tableName: 'messageTokens',
   timestamps: true,
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  hooks: {
-    beforeSave: async (token) => {
-      // Auto-refill tokens daily for free users
-      const subscription = await sequelize.models.Subscription.findOne({
-        where: { userId: token.userId }
-      });
-      
-      const now = new Date();
-      const lastRefill = new Date(token.lastRefill);
-      const hoursSinceRefill = (now - lastRefill) / (1000 * 60 * 60);
-      
-      if (hoursSinceRefill >= 24) {
-        const maxTokens = subscription?.planType === 'premium' || subscription?.planType === 'vip' ? 999 : 5;
-        token.tokens = maxTokens;
-        token.tokensUsed = 0;
-        token.lastRefill = now;
-      }
-    }
-  }
+  updatedAt: 'updatedAt'
 });
 
 module.exports = MessageToken;
