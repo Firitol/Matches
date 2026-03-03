@@ -1,12 +1,12 @@
-// server.js - EthioMatch FINAL PRODUCTION READY
+// server.js - EthioMatch PRODUCTION READY (No Premium - Stable Version)
 require('dotenv').config();
 
 process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err.message);
+  console.error('Uncaught Exception:', err.message);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection:', reason);
+  console.error('Unhandled Rejection:', reason);
 });
 
 const express = require('express');
@@ -32,7 +32,7 @@ const { User, Match, Message, Subscription, MessageToken, Payment, sequelize } =
 const connectDB = async () => {
   try {
     if (!process.env.DATABASE_URL) {
-      console.error('❌ DATABASE_URL not set');
+      console.error('DATABASE_URL not set');
       return null;
     }
     
@@ -44,12 +44,12 @@ const connectDB = async () => {
     if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
     
     await sequelize.authenticate();
-    console.log('✅ Neon PostgreSQL Connected');
+    console.log('Neon PostgreSQL Connected');
     await sequelize.sync({ alter: true });
-    console.log('✅ Database tables synced');
+    console.log('Database tables synced');
     return sequelize;
   } catch (error) {
-    console.error('❌ Neon Connection Error:', error.message);
+    console.error('Neon Connection Error:', error.message);
     return null;
   }
 };
@@ -831,7 +831,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
   
   try {
     const { matchId } = req.params;
-    const { content } = req.body;
+    const content = req.body.content;
     
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Message cannot be empty' });
@@ -861,7 +861,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
     res.json({
       success: true,
       message: 'Message sent!',
-      data: {
+       {
         id: message.id,
         content: message.content,
         senderId: message.senderId,
@@ -890,7 +890,7 @@ app.post('/messages/:matchId/send-media',
     
     try {
       const { matchId } = req.params;
-      const { caption } = req.body;
+      const caption = req.body.caption;
       
       if (!req.cloudinaryResult) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -921,7 +921,7 @@ app.post('/messages/:matchId/send-media',
       res.json({
         success: true,
         message: 'Media sent!',
-        data: {
+         {
           id: message.id,
           content: message.content,
           senderId: message.senderId,
@@ -939,269 +939,6 @@ app.post('/messages/:matchId/send-media',
     }
   }
 );
-
-// ============================================
-// PREMIUM & PAYMENT ROUTES - SIMPLIFIED & FIXED
-// ============================================
-
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-const PLANS = {
-  free: { name: 'Free', price: 0, tokensPerDay: 5 },
-  basic: { name: 'Basic', price: 999, tokensPerDay: 20, stripePriceId: process.env.STRIPE_BASIC_PRICE_ID },
-  premium: { name: 'Premium', price: 1999, tokensPerDay: 999, stripePriceId: process.env.STRIPE_PREMIUM_PRICE_ID },
-  vip: { name: 'VIP', price: 2999, tokensPerDay: 999, stripePriceId: process.env.STRIPE_VIP_PRICE_ID }
-};
-
-const TOKEN_PACKAGES = {
-  10: { price: 499, name: '10 Tokens' },
-  25: { price: 999, name: '25 Tokens' },
-  50: { price: 1699, name: '50 Tokens' },
-  100: { price: 2999, name: '100 Tokens' }
-};
-
-// Premium Page
-app.get('/premium', async (req, res) => {
-  try {
-    let userSubscription = null;
-    let userTokens = null;
-    
-    if (req.session.userId) {
-      userSubscription = await Subscription.findOne({ where: { userId: req.session.userId } });
-      userTokens = await MessageToken.findOne({ where: { userId: req.session.userId } });
-    }
-    
-    res.render('premium', {
-      title: 'Go Premium',
-      plans: PLANS,
-      tokenPackages: TOKEN_PACKAGES,
-      userSubscription: userSubscription ? userSubscription.toJSON() : null,
-      userTokens: userTokens ? userTokens.toJSON() : null,
-      currentUser: req.session.user || null
-    });
-  } catch (error) {
-    console.error('Premium page error:', error.message);
-    res.redirect('/dashboard');
-  }
-});
-
-// Create Checkout Session
-app.post('/payment/create-checkout', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Please login first' });
-  }
-  
-  try {
-    const { planType, tokenAmount } = req.body;
-    
-    if (!planType && !tokenAmount) {
-      return res.status(400).json({ success: false, message: 'Must specify plan or tokens' });
-    }
-    
-    const user = await User.findByPk(req.session.userId);
-    
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    let lineItems;
-    
-    if (planType && planType !== 'free') {
-      const plan = PLANS[planType];
-      if (!plan || !plan.stripePriceId) {
-        throw new Error('Invalid plan or Stripe price ID not configured');
-      }
-      lineItems = [
-        {
-          price: plan.stripePriceId,
-          quantity: 1
-        }
-      ];
-    } else if (tokenAmount) {
-      const pkg = TOKEN_PACKAGES[tokenAmount];
-      if (!pkg) {
-        throw new Error('Invalid token package');
-      }
-      lineItems = [
-        {
-          price_ {
-            currency: 'usd',
-            product_ {
-              name: 'EthioMatch ' + pkg.name,
-              description: 'Message tokens for EthioMatch'
-            },
-            unit_amount: pkg.price
-          },
-          quantity: 1
-        }
-      ];
-    }
-    
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: planType && planType !== 'free' ? 'subscription' : 'payment',
-      success_url: process.env.BASE_URL + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: process.env.BASE_URL + '/premium?canceled=true',
-      client_reference_id: user.id,
-      customer_email: user.email,
-      metadata: {
-        userId: user.id,
-        planType: planType || 'tokens',
-        tokenAmount: tokenAmount || ''
-      }
-    });
-    
-    await Payment.create({
-      userId: user.id,
-      stripeCheckoutSessionId: session.id,
-      amount: planType ? PLANS[planType].price : (TOKEN_PACKAGES[tokenAmount] ? TOKEN_PACKAGES[tokenAmount].price : 0),
-      currency: 'usd',
-      status: 'pending',
-      paymentType: planType ? 'subscription' : 'tokens',
-      metadata: { planType: planType, tokenAmount: tokenAmount }
-    });
-    
-    res.json({ success: true, url: session.url });
-    
-  } catch (error) {
-    console.error('Checkout error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to create checkout session' });
-  }
-});
-
-// Payment Success
-app.get('/payment/success', async (req, res) => {
-  try {
-    const { session_id } = req.query;
-    
-    if (!session_id) {
-      req.flash('error', 'Invalid payment session');
-      return res.redirect('/premium');
-    }
-    
-    const session = await stripe.checkout.sessions.retrieve(session_id);
-    
-    if (session.payment_status === 'paid') {
-      const userId = session.client_reference_id;
-      const metadata = session.metadata;
-      
-      if (metadata.planType && metadata.planType !== 'tokens') {
-        await Subscription.update(
-          {
-            planType: metadata.planType,
-            status: 'active',
-            stripeSubscriptionId: session.subscription,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-          },
-          { where: { userId: userId } }
-        );
-        
-        const plan = PLANS[metadata.planType];
-        await MessageToken.update(
-          { tokens: plan.tokensPerDay, tokensUsed: 0, lastRefill: new Date() },
-          { where: { userId: userId } }
-        );
-        
-        req.flash('success', 'Premium ' + metadata.planType + ' activated!');
-      } else if (metadata.tokenAmount) {
-        const tokenAmount = parseInt(metadata.tokenAmount);
-        await MessageToken.upsert({
-          userId: userId,
-          tokens: tokenAmount,
-          tokensUsed: 0,
-          lastRefill: new Date()
-        });
-        
-        req.flash('success', tokenAmount + ' tokens added!');
-      }
-      
-      await Payment.update(
-        { status: 'completed', stripePaymentIntentId: session.payment_intent },
-        { where: { stripeCheckoutSessionId: session_id } }
-      );
-    }
-    
-    res.redirect('/premium?success=true');
-    
-  } catch (error) {
-    console.error('Payment success error:', error.message);
-    req.flash('error', 'Payment verification failed');
-    res.redirect('/premium');
-  }
-});
-
-// Token Balance API
-app.get('/api/token-balance', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    let tokens = await MessageToken.findOne({ where: { userId: req.session.userId } });
-    
-    if (!tokens) {
-      tokens = await MessageToken.create({
-        userId: req.session.userId,
-        tokens: 5,
-        tokensUsed: 0
-      });
-    }
-    
-    const subscription = await Subscription.findOne({ where: { userId: req.session.userId } });
-    
-    res.json({
-      success: true,
-      tokens: tokens.tokens - tokens.tokensUsed,
-      totalTokens: tokens.tokens,
-      tokensUsed: tokens.tokensUsed,
-      planType: subscription ? subscription.planType : 'free',
-      lastRefill: tokens.lastRefill
-    });
-    
-  } catch (error) {
-    console.error('Token balance error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to get token balance' });
-  }
-});
-
-// Use Token API
-app.post('/api/use-token', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  try {
-    const tokens = await MessageToken.findOne({ where: { userId: req.session.userId } });
-    const subscription = await Subscription.findOne({ where: { userId: req.session.userId } });
-    
-    if (subscription && (subscription.planType === 'premium' || subscription.planType === 'vip')) {
-      return res.json({ success: true, tokens: 999, message: 'Unlimited tokens (Premium)' });
-    }
-    
-    if (!tokens || tokens.tokens - tokens.tokensUsed <= 0) {
-      return res.status(402).json({
-        success: false,
-        message: 'No tokens available. Please purchase more or upgrade to Premium.',
-        tokens: 0
-      });
-    }
-    
-    tokens.tokensUsed += 1;
-    await tokens.save();
-    
-    res.json({
-      success: true,
-      tokens: tokens.tokens - tokens.tokensUsed,
-      message: 'Token used successfully'
-    });
-    
-  } catch (error) {
-    console.error('Use token error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to use token' });
-  }
-});
 
 // 404 Handler
 app.use((req, res) => {
@@ -1239,9 +976,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
-  console.log('🚀 EthioMatch running on port ' + PORT);
-  console.log('🌍 Environment: ' + (process.env.NODE_ENV || 'development'));
-  console.log('🔧 Session Store: ' + (useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'));
+  console.log('EthioMatch running on port ' + PORT);
+  console.log('Environment: ' + (process.env.NODE_ENV || 'development'));
+  console.log('Session Store: ' + (useMemoryStore ? 'MemoryStore (preview)' : 'PostgreSQLStore (production)'));
 });
 
 process.on('SIGTERM', () => {
