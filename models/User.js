@@ -1,4 +1,4 @@
-// models/User.js - NO Message associations here
+// models/User.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
 const bcrypt = require('bcryptjs');
@@ -55,6 +55,11 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     defaultValue: '/images/default-avatar.png'
   },
+  profileImagePublicId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'profileImagePublicId'
+  },
   isActive: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
@@ -89,6 +94,6 @@ User.prototype.updateLastActive = async function() {
   return this.save().catch(() => {});
 };
 
-// ✅ NO Message associations here - prevents circular dependency
+// NO ASSOCIATIONS HERE - handled in models/index.js
 
 module.exports = User;
