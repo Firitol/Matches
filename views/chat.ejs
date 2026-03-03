@@ -4,40 +4,53 @@
 <div class="chat-container" style="max-width:900px;margin:2rem auto;padding:0 1rem;height:calc(100vh - 150px);display:flex;flex-direction:column">
   
   <!-- Chat Header -->
-  <div style="display:flex;align-items:center;padding:1rem;background:#fff;border-radius:12px 12px 0 0;box-shadow:0 2px 10px rgba(0,0,0,0.1);border-bottom:1px solid #f0f0f0">
-    <a href="/messages" style="margin-right:1rem;color:#666;text-decoration:none;font-size:1.5rem">←</a>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#fff;border-radius:12px 12px 0 0;box-shadow:0 2px 10px rgba(0,0,0,0.1);border-bottom:1px solid #f0f0f0">
+    <div style="display:flex;align-items:center;flex:1">
+      <a href="/messages" style="margin-right:1rem;color:#666;text-decoration:none;font-size:1.5rem">←</a>
+      
+      <div style="width:50px;height:50px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);margin-right:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <% if (match.otherUser.profileImage && match.otherUser.profileImage.startsWith('http')) { %>
+          <img src="<%= match.otherUser.profileImage %>" alt="<%= match.otherUser.username %>" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=\\'font-size:1.5rem;color:white\\\\'>👤</span>'">
+        <% } else { %>
+          <span style="font-size:1.5rem;color:white">
+            <%= typeof getAvatarEmoji === 'function' ? getAvatarEmoji(match.otherUser.username) : '👤' %>
+          </span>
+        <% } %>
+      </div>
+      
+      <div>
+        <h2 style="margin:0;font-size:1.1rem;color:#1A1A2E;display:flex;align-items:center;gap:0.5rem">
+          <%= match.otherUser.username %>
+          <% if (match.otherUser.isVerified) { %>
+            <span style="color:#26EAED" title="Verified">✓</span>
+          <% } %>
+        </h2>
+        <small style="color:#22c55e;display:flex;align-items:center;gap:0.25rem">
+          <span style="width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block"></span>
+          Online
+        </small>
+      </div>
+    </div>
     
-    <div style="width:50px;height:50px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);margin-right:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <% if (match.otherUser.profileImage && match.otherUser.profileImage.startsWith('http')) { %>
-        <img src="<%= match.otherUser.profileImage %>" alt="<%= match.otherUser.username %>" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=\\'font-size:1.5rem;color:white\\\\'>👤</span>'">
-      <% } else { %>
-        <span style="font-size:1.5rem;color:white">
-          <%= typeof getAvatarEmoji === 'function' ? getAvatarEmoji(match.otherUser.username) : '👤' %>
-        </span>
+    <!-- Token Balance Display -->
+    <div style="text-align:right;padding:0.5rem 1rem;background:#f9fafb;border-radius:8px;margin-left:1rem">
+      <div style="font-size:0.75rem;color:#6B7280;margin-bottom:0.25rem">🪙 Tokens</div>
+      <div id="tokenCounter" style="font-size:1.25rem;font-weight:700;color:#26EAED">
+        <%= typeof userTokens !== 'undefined' && userTokens !== null ? (userTokens.tokens - userTokens.tokensUsed) : 5 %>
+      </div>
+      <% if (typeof userSubscription !== 'undefined' && userSubscription && (userSubscription.planType === 'premium' || userSubscription.planType === 'vip')) { %>
+        <div style="font-size:0.7rem;color:#22c55e;margin-top:0.25rem">♾️ Unlimited</div>
       <% } %>
-    </div>
-    
-    <div style="flex:1">
-      <h2 style="margin:0;font-size:1.1rem;color:#1A1A2E"><%= match.otherUser.username %></h2>
-      <small style="color:#22c55e;display:flex;align-items:center;gap:0.25rem">
-        <span style="width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block"></span>
-        Online
-      </small>
-    </div>
-    
-    <div style="text-align:right">
-      <small style="color:#6B7280;display:block">Match ID</small>
-      <small style="color:#9CA3AF;font-family:monospace;font-size:0.75rem"><%= match.id.substring(0, 8) %>...</small>
     </div>
   </div>
   
-  <!-- Messages Area - WITH MEDIA DISPLAY -->
+  <!-- Messages Area -->
   <div id="messagesList" style="flex:1;overflow-y:auto;padding:1.5rem;background:#f9fafb;display:flex;flex-direction:column;gap:1rem">
     
     <% if (messages && messages.length > 0) { %>
       <% messages.forEach(msg => { %>
         <div style="display:flex;<%= msg.senderId === currentUser.id ? 'justify-content:flex-end' : 'justify-content:flex-start' %>">
-          <div style="max-width:75%;padding:0;border-radius:18px;<%= msg.senderId === currentUser.id ? '' : '' %>">
+          <div style="max-width:75%;padding:0">
             
             <!-- Message Bubble -->
             <div style="padding:0.75rem 1rem;border-radius:18px;<%= msg.senderId === currentUser.id ? 'background:#26EAED;color:#1A1A2E' : 'background:#fff;color:#1A1A2E;box-shadow:0 1px 3px rgba(0,0,0,0.1)' %>">
@@ -80,12 +93,27 @@
         <div style="font-size:4rem;margin-bottom:1rem">💬</div>
         <h3 style="margin:0 0 0.5rem 0;color:#1A1A2E">Start the Conversation</h3>
         <p style="margin:0;color:#6B7280">Say hello to <%= match.otherUser.username %>!</p>
+        <% if (typeof userTokens !== 'undefined' && userTokens !== null && (userTokens.tokens - userTokens.tokensUsed) <= 0) { %>
+          <div style="margin-top:1rem;padding:1rem;background:#FEF2F2;border-radius:8px">
+            <p style="margin:0 0 0.5rem 0;color:#991B1B;font-weight:600">⚠️ No tokens available</p>
+            <a href="/premium" style="color:#26EAED;text-decoration:none;font-weight:600">Get more tokens →</a>
+          </div>
+        <% } %>
       </div>
     <% } %>
     
   </div>
   
-  <!-- Message Input Area - WITH MEDIA UPLOAD -->
+  <!-- Token Warning Banner (if low tokens) -->
+  <% if (typeof userTokens !== 'undefined' && userTokens !== null && (userTokens.tokens - userTokens.tokensUsed) <= 2) { %>
+    <% if (typeof userSubscription === 'undefined' || !userSubscription || (userSubscription.planType !== 'premium' && userSubscription.planType !== 'vip')) { %>
+      <div id="lowTokenWarning" style="padding:0.75rem 1rem;background:#FEF2F2;color:#991B1B;text-align:center;font-size:0.875rem;border-top:1px solid #FECACA">
+        ⚠️ Only <%= userTokens.tokens - userTokens.tokensUsed %> tokens left! <a href="/premium" style="color:#991B1B;text-decoration:underline;font-weight:600">Get more tokens →</a>
+      </div>
+    <% } %>
+  <% } %>
+  
+  <!-- Message Input Area -->
   <form id="messageForm" style="display:flex;gap:0.5rem;padding:1rem;background:#fff;border-radius:0 0 12px 12px;box-shadow:0 -2px 10px rgba(0,0,0,0.1);border-top:1px solid #f0f0f0">
     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
     
@@ -102,7 +130,7 @@
            autocomplete="off">
     
     <!-- Send Button -->
-    <button type="submit" style="padding:0.75rem 1.5rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:24px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all 0.2s" onmouseover="this.style.background='#1dd1d4'" onmouseout="this.style.background='#26EAED'">
+    <button type="submit" id="sendBtn" style="padding:0.75rem 1.5rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:24px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all 0.2s" onmouseover="this.style.background='#1dd1d4'" onmouseout="this.style.background='#26EAED'">
       Send
     </button>
   </form>
@@ -112,7 +140,7 @@
   
 </div>
 
-<!-- Image Modal (for viewing full-size images) -->
+<!-- Image Modal -->
 <div id="imageModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:1000;align-items:center;justify-content:center" onclick="closeImageModal()">
   <img id="modalImage" src="" alt="Full size" style="max-width:90%;max-height:90%;object-fit:contain">
   <button onclick="closeImageModal()" style="position:absolute;top:20px;right:20px;background:white;color:black;border:none;padding:0.75rem 1.5rem;border-radius:8px;font-weight:600;cursor:pointer">✕ Close</button>
@@ -126,6 +154,8 @@ const messageForm = document.getElementById('messageForm');
 const messageInput = document.getElementById('messageInput');
 const mediaInput = document.getElementById('mediaInput');
 const uploadStatus = document.getElementById('uploadStatus');
+const tokenCounter = document.getElementById('tokenCounter');
+const sendBtn = document.getElementById('sendBtn');
 
 // Auto-scroll to bottom
 function scrollToBottom() {
@@ -133,13 +163,28 @@ function scrollToBottom() {
 }
 scrollToBottom();
 
-// Show upload status
-function showUploadStatus(message, type = 'info') {
+// Show upload/status message
+function showStatus(message, type = 'info') {
   uploadStatus.textContent = message;
   uploadStatus.style.display = 'block';
   uploadStatus.style.background = type === 'error' ? '#FEF2F2' : type === 'success' ? '#F0FDF4' : '#f0f9ff';
   uploadStatus.style.color = type === 'error' ? '#991B1B' : type === 'success' ? '#166534' : '#0369a1';
   setTimeout(() => { uploadStatus.style.display = 'none'; }, 3000);
+}
+
+// Update token display
+function updateTokenDisplay(tokens) {
+  if (tokenCounter) {
+    tokenCounter.textContent = tokens >= 999 ? '∞' : tokens;
+  }
+  
+  // Show/hide low token warning
+  const warning = document.getElementById('lowTokenWarning');
+  if (warning && tokens <= 2 && tokens > 0) {
+    warning.style.display = 'block';
+  } else if (warning) {
+    warning.style.display = 'none';
+  }
 }
 
 // Send text message
@@ -150,11 +195,28 @@ if (messageForm) {
     const content = messageInput.value.trim();
     if (!content) return;
     
-    messageInput.disabled = true;
-    const sendBtn = messageForm.querySelector('button');
-    if (sendBtn) sendBtn.disabled = true;
-    
+    // Check token balance before sending
     try {
+      const tokenResponse = await fetch('/api/use-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const tokenData = await tokenResponse.json();
+      
+      if (!tokenData.success) {
+        // No tokens available
+        const upgrade = confirm(tokenData.message + '\n\nWould you like to upgrade to Premium for unlimited messages?');
+        if (upgrade) {
+          window.location.href = '/premium';
+        }
+        return;
+      }
+      
+      // Token used successfully, send message
+      messageInput.disabled = true;
+      if (sendBtn) sendBtn.disabled = true;
+      
       const response = await fetch('/messages/' + matchId + '/send', {
         method: 'POST',
         headers: {
@@ -168,12 +230,13 @@ if (messageForm) {
       if (data.success) {
         addMessageToUI(data.data);
         messageInput.value = '';
+        updateTokenDisplay(tokenData.tokens);
       } else {
-        showUploadStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
+        showStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
       }
     } catch (error) {
       console.error('Send error:', error);
-      showUploadStatus('Failed to send message. Please try again.', 'error');
+      showStatus('Failed to send message. Please try again.', 'error');
     } finally {
       messageInput.disabled = false;
       if (sendBtn) sendBtn.disabled = false;
@@ -190,25 +253,43 @@ async function sendMedia() {
   // Validate file type
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
   if (!allowedTypes.includes(file.type)) {
-    showUploadStatus('❌ Invalid file type. Please upload JPG, PNG, GIF, WebP, MP4, or WebM.', 'error');
+    showStatus('❌ Invalid file type. Please upload JPG, PNG, GIF, WebP, MP4, or WebM.', 'error');
     mediaInput.value = '';
     return;
   }
   
   // Validate file size (10MB max)
   if (file.size > 10 * 1024 * 1024) {
-    showUploadStatus('❌ File too large. Maximum size is 10MB.', 'error');
+    showStatus('❌ File too large. Maximum size is 10MB.', 'error');
     mediaInput.value = '';
     return;
   }
   
-  const sendBtn = messageForm.querySelector('button');
   if (sendBtn) sendBtn.disabled = true;
   mediaInput.disabled = true;
   
-  showUploadStatus('⏳ Uploading media... Please wait.', 'info');
+  showStatus('⏳ Uploading media... Please wait.', 'info');
   
   try {
+    // Check token balance for media messages too
+    const tokenResponse = await fetch('/api/use-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const tokenData = await tokenResponse.json();
+    
+    if (!tokenData.success) {
+      const upgrade = confirm(tokenData.message + '\n\nWould you like to upgrade to Premium?');
+      if (upgrade) {
+        window.location.href = '/premium';
+      }
+      if (sendBtn) sendBtn.disabled = false;
+      mediaInput.disabled = false;
+      mediaInput.value = '';
+      return;
+    }
+    
     const formData = new FormData();
     formData.append('media', file);
     formData.append('uploadType', 'message');
@@ -222,13 +303,14 @@ async function sendMedia() {
     
     if (data.success) {
       addMessageToUI(data.data);
-      showUploadStatus('✅ Media sent!', 'success');
+      showStatus('✅ Media sent!', 'success');
+      updateTokenDisplay(tokenData.tokens);
     } else {
-      showUploadStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
+      showStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
     }
   } catch (error) {
     console.error('Media send error:', error);
-    showUploadStatus('Failed to send media. Please try again.', 'error');
+    showStatus('Failed to send media. Please try again.', 'error');
   } finally {
     if (sendBtn) sendBtn.disabled = false;
     mediaInput.disabled = false;
@@ -294,6 +376,19 @@ document.addEventListener('keydown', (e) => {
     closeImageModal();
   }
 });
+
+// Refresh token balance every 30 seconds
+setInterval(async () => {
+  try {
+    const response = await fetch('/api/token-balance');
+    const data = await response.json();
+    if (data.success) {
+      updateTokenDisplay(data.tokens);
+    }
+  } catch (error) {
+    console.error('Token refresh error:', error);
+  }
+}, 30000);
 </script>
 
 <%- include('partials/footer') %>
