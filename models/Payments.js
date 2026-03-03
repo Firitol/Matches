@@ -1,4 +1,4 @@
-// models/Payment.js
+// models/Payment.js - MINIMAL VERSION
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
 
@@ -13,23 +13,9 @@ const Payment = sequelize.define('Payment', {
     allowNull: false,
     field: 'userId'
   },
-  stripePaymentIntentId: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    field: 'stripePaymentIntentId'
-  },
-  stripeCheckoutSessionId: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    field: 'stripeCheckoutSessionId'
-  },
   amount: {
     type: DataTypes.INTEGER,
     allowNull: false
-  },
-  currency: {
-    type: DataTypes.STRING,
-    defaultValue: 'USD'
   },
   status: {
     type: DataTypes.STRING,
@@ -39,10 +25,6 @@ const Payment = sequelize.define('Payment', {
     type: DataTypes.STRING,
     allowNull: false,
     field: 'paymentType'
-  },
-  metadata: {
-    type: DataTypes.JSONB,
-    allowNull: true
   }
 }, {
   tableName: 'payments',
@@ -50,5 +32,8 @@ const Payment = sequelize.define('Payment', {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 });
+
+// Add debug log to verify it loads
+console.log('✅ Payment model loaded');
 
 module.exports = Payment;
