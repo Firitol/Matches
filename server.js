@@ -893,7 +893,7 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room - NOW FETCHES SAVED MESSAGES
+// 💬 Chat Room - SIMPLIFIED (No User Association Required)
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
@@ -903,6 +903,7 @@ app.get('/messages/:matchId', async (req, res) => {
     const Message = require('./models/Message');
     const User = require('./models/User');
     
+    // Find match
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -910,11 +911,7 @@ app.get('/messages/:matchId', async (req, res) => {
           { user1Id: req.session.userId },
           { user2Id: req.session.userId }
         ]
-      },
-      include: [
-        { model: User, as: 'user1', attributes: ['id', 'username', 'profileImage'] },
-        { model: User, as: 'user2', attributes: ['id', 'username', 'profileImage'] }
-      ]
+      }
     });
     
     if (!match) {
@@ -927,17 +924,32 @@ app.get('/messages/:matchId', async (req, res) => {
       return res.redirect('/matches');
     }
     
-    // ✅ Fetch all messages for this match
+    // ✅ Fetch messages WITHOUT User association
     const messages = await Message.findAll({
       where: { matchId: matchId },
-      include: [
-        { model: User, as: 'sender', attributes: ['id', 'username', 'profileImage'] }
-      ],
       order: [['createdAt', 'ASC']],
       limit: 100
     });
     
-    // Mark messages as read (from other user)
+    // ✅ Get sender info separately (no association needed)
+    const messagesWithSender = await Promise.all(
+      messages.map(async (msg) => {
+        const sender = await User.findByPk(msg.senderId, {
+          attributes: ['id', 'username', 'profileImage']
+        });
+        return {
+          id: msg.id,
+          content: msg.content,
+          senderId: msg.senderId,
+          senderName: sender?.username || 'Unknown',
+          senderImage: sender?.profileImage,
+          createdAt: msg.createdAt,
+          isRead: msg.isRead
+        };
+      })
+    );
+    
+    // Mark messages as read
     await Message.update(
       { isRead: true, readAt: new Date() },
       {
@@ -949,27 +961,24 @@ app.get('/messages/:matchId', async (req, res) => {
       }
     );
     
-    const otherUser = match.user1Id === req.session.userId ? match.user2 : match.user1;
+    // Get other user info
+    const otherUserId = match.user1Id === req.session.userId ? match.user2Id : match.user1Id;
+    const otherUser = await User.findByPk(otherUserId, {
+      attributes: ['id', 'username', 'profileImage']
+    });
     
     res.render('chat', {
-      title: `Chat with ${otherUser.username}`,
+      title: `Chat with ${otherUser?.username || 'User'}`,
       match: {
         id: match.id,
         status: match.status,
         otherUser: {
-          id: otherUser.id,
-          username: otherUser.username,
-          profileImage: otherUser.profileImage
+          id: otherUser?.id,
+          username: otherUser?.username || 'User',
+          profileImage: otherUser?.profileImage
         }
       },
-      messages: messages.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        senderId: msg.senderId,
-        senderName: msg.sender?.username,
-        createdAt: msg.createdAt,
-        isRead: msg.isRead
-      })),
+      messages: messagesWithSender,
       currentUser: {
         id: req.session.userId,
         username: req.session.username
@@ -978,6 +987,7 @@ app.get('/messages/:matchId', async (req, res) => {
     
   } catch (error) {
     console.error('Chat room error:', error.message);
+    console.error('Stack:', error.stack);
     res.redirect('/messages');
   }
 });
