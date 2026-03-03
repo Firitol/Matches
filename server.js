@@ -378,9 +378,7 @@ app.post('/register', async (req, res) => {
       req.flash('error', 'You must agree to the Terms of Service');
       return res.redirect('/register');
     }
-    
-    const User = require('./models/User');
-    
+   
     const existing = await User.findOne({
       where: {
         [Op.or]: [
@@ -441,10 +439,7 @@ app.get('/dashboard', async (req, res) => {
       req.flash('error', 'Please login to continue');
       return res.redirect('/login');
     }
-    
-    const User = require('./models/User');
-    const Match = require('./models/Match');
-    
+ 
     const user = await User.findByPk(req.session.userId, {
       attributes: { exclude: ['password'] }
     });
@@ -632,9 +627,6 @@ app.post('/profile', async (req, res) => {
 app.get('/matches', async (req, res) => {
   if (!req.session.userId) return res.redirect('/login');
   try {
-    const Match = require('./models/Match');
-    const User = require('./models/User');
-    
     const matches = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
@@ -671,8 +663,7 @@ app.post('/like/:userId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot like yourself' });
     }
     
-    const Match = require('./models/Match');
-    
+   
     let match = await Match.findOne({
       where: {
         [Op.or]: [
@@ -726,9 +717,6 @@ app.get('/likes/pending', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
     
-    const Match = require('./models/Match');
-    const User = require('./models/User');
-    
     const pendingLikes = await Match.findAll({
       where: {
         [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
@@ -770,8 +758,6 @@ app.post('/likes/:matchId/accept', async (req, res) => {
   
   try {
     const { matchId } = req.params;
-    const Match = require('./models/Match');
-    
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -816,8 +802,6 @@ app.post('/likes/:matchId/reject', async (req, res) => {
   
   try {
     const { matchId } = req.params;
-    const Match = require('./models/Match');
-    
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -849,9 +833,6 @@ app.post('/likes/:matchId/reject', async (req, res) => {
 app.get('/messages', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
-    
-    const Match = require('./models/Match');
-    const User = require('./models/User');
     
     const matches = await Match.findAll({
       where: {
@@ -899,9 +880,6 @@ app.get('/messages/:matchId', async (req, res) => {
     if (!req.session.userId) return res.redirect('/login');
     
     const { matchId } = req.params;
-    const Match = require('./models/Match');
-    const Message = require('./models/Message');
-    const User = require('./models/User');
     
     // Find match
     const match = await Match.findOne({
@@ -1005,9 +983,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ success: false, message: 'Message cannot be empty' });
     }
-    
-    const Match = require('./models/Match');
-    const Message = require('./models/Message');
+   
     
     const match = await Match.findOne({
       where: {
