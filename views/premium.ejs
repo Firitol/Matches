@@ -3,53 +3,19 @@
 
 <div class="premium-container" style="max-width:1200px;margin:2rem auto;padding:0 1rem">
   
-  <!-- Header -->
   <div style="text-align:center;margin-bottom:3rem">
     <h1 style="margin:0 0 1rem 0;color:#1A1A2E;font-size:2.5rem">💎 Upgrade to Premium</h1>
     <p style="margin:0;color:#6B7280;font-size:1.1rem">Unlock exclusive features and find love faster</p>
-    
-    <% if (typeof success !== 'undefined' && success && success.length > 0) { %>
-      <div style="background:#F0FDF4;color:#166534;padding:1rem;border-radius:8px;margin-top:1.5rem;display:inline-block">
-        <% success.forEach(msg => { %><p style="margin:0"><%= msg %></p><% }) %>
-      </div>
-    <% } %>
-    
-    <% if (typeof error !== 'undefined' && error && error.length > 0) { %>
-      <div style="background:#FEF2F2;color:#991B1B;padding:1rem;border-radius:8px;margin-top:1.5rem;display:inline-block">
-        <% error.forEach(msg => { %><p style="margin:0"><%= msg %></p><% }) %>
-      </div>
-    <% } %>
   </div>
-  
-  <!-- Current Status -->
-  <% if (currentUser) { %>
-    <div style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:2rem;border-radius:12px;margin-bottom:3rem;text-align:center">
-      <h2 style="margin:0 0 1rem 0">Your Current Plan</h2>
-      <div style="display:flex;justify-content:center;gap:3rem;flex-wrap:wrap">
-        <div>
-          <div style="font-size:2rem;font-weight:700"><%= userSubscription?.planType?.toUpperCase() || 'FREE' %></div>
-          <div style="opacity:0.9"><%= userSubscription?.status === 'active' ? '✅ Active' : '⏳ Inactive' %></div>
-        </div>
-        <div>
-          <div style="font-size:2rem;font-weight:700">🪙 <%= userTokens ? userTokens.tokens - userTokens.tokensUsed : 5 %></div>
-          <div style="opacity:0.9">Tokens Available</div>
-        </div>
-        <% if (userSubscription?.currentPeriodEnd) { %>
-          <div>
-            <div style="font-size:2rem;font-weight:700"><%= typeof formatDate === 'function' ? formatDate(userSubscription.currentPeriodEnd) : '' %></div>
-            <div style="opacity:0.9">Renews On</div>
-          </div>
-        <% } %>
-      </div>
-    </div>
-  <% } %>
   
   <!-- Premium Plans -->
   <h2 style="text-align:center;margin-bottom:2rem;color:#1A1A2E">Choose Your Plan</h2>
   
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-bottom:3rem">
-    <% Object.entries(plans).forEach(([planKey, plan]) => { %>
-      <div style="background:#fff;border:2px solid <%= planKey === 'premium' ? '#26EAED' : '#e0e0e0' %>;border-radius:12px;padding:2rem;position:relative;<%= planKey === 'premium' ? 'box-shadow:0 4px 20px rgba(38,234,237,0.3)' : '' %>">
+    <% Object.keys(plans).forEach(function(planKey) {
+      var plan = plans[planKey];
+    %>
+      <div style="background:#fff;border:2px solid <%= planKey === 'premium' ? '#26EAED' : '#e0e0e0' %>;border-radius:12px;padding:2rem;position:relative">
         
         <% if (planKey === 'premium') { %>
           <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#26EAED;color:#1A1A2E;padding:0.25rem 1rem;border-radius:20px;font-weight:600;font-size:0.875rem">MOST POPULAR</div>
@@ -64,12 +30,12 @@
         </div>
         
         <ul style="list-style:none;padding:0;margin:0 0 2rem 0">
-          <% plan.features.forEach(feature => { %>
+          <% plan.features.forEach(function(feature) { %>
             <li style="padding:0.5rem 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:0.5rem">
               <span style="color:#22c55e">✓</span>
               <span style="color:#374151"><%= feature %></span>
             </li>
-          <% }) %>
+          <% }); %>
         </ul>
         
         <% if (planKey === 'free') { %>
@@ -77,21 +43,22 @@
             Current Plan
           </button>
         <% } else { %>
-          <button onclick="startCheckout('<%= planKey %>')" style="width:100%;padding:1rem;background:<%= planKey === 'premium' ? '#26EAED' : '#1A1A2E' %>;color:<%= planKey === 'premium' ? '#1A1A2E' : '#fff' %>;border:none;border-radius:8px;font-weight:600;cursor:pointer;transition:all 0.2s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-            <%= userSubscription?.planType === planKey ? 'Current Plan' : 'Upgrade Now' %>
+          <button onclick="startCheckout('<%= planKey %>')" style="width:100%;padding:1rem;background:<%= planKey === 'premium' ? '#26EAED' : '#1A1A2E' %>;color:<%= planKey === 'premium' ? '#1A1A2E' : '#fff' %>;border:none;border-radius:8px;font-weight:600;cursor:pointer">
+            <%= userSubscription && userSubscription.planType === planKey ? 'Current Plan' : 'Upgrade Now' %>
           </button>
         <% } %>
         
       </div>
-    <% }) %>
+    <% }); %>
   </div>
   
   <!-- Token Packages -->
   <h2 style="text-align:center;margin-bottom:2rem;color:#1A1A2E">🪙 Buy Message Tokens</h2>
-  <p style="text-align:center;color:#6B7280;margin-bottom:2rem">Need more messages? Purchase token packages anytime!</p>
   
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:3rem">
-    <% Object.entries(tokenPackages).forEach(([amount, pkg]) => { %>
+    <% Object.keys(tokenPackages).forEach(function(amount) {
+      var pkg = tokenPackages[amount];
+    %>
       <div style="background:#fff;border:2px solid #e0e0e0;border-radius:12px;padding:1.5rem;text-align:center">
         <div style="font-size:2rem;font-weight:700;color:#26EAED;margin-bottom:0.5rem"><%= pkg.name %></div>
         <div style="font-size:1.5rem;font-weight:600;color:#1A1A2E;margin-bottom:1rem">$<%= pkg.price / 100 %></div>
@@ -99,65 +66,7 @@
           Purchase
         </button>
       </div>
-    <% }) %>
-  </div>
-  
-  <!-- Features Comparison -->
-  <div style="background:#fff;border-radius:12px;padding:2rem;margin-bottom:3rem">
-    <h2 style="text-align:center;margin-bottom:2rem;color:#1A1A2E">Why Go Premium?</h2>
-    
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:2rem">
-      <div style="text-align:center">
-        <div style="font-size:3rem;margin-bottom:1rem">💬</div>
-        <h3 style="margin:0 0 0.5rem 0">Unlimited Messages</h3>
-        <p style="color:#6B7280;margin:0">Connect with as many matches as you want without token limits</p>
-      </div>
-      
-      <div style="text-align:center">
-        <div style="font-size:3rem;margin-bottom:1rem">👁️</div>
-        <h3 style="margin:0 0 0.5rem 0">See Who Liked You</h3>
-        <p style="color:#6B7280;margin:0">Never miss a potential match - see everyone who swiped right</p>
-      </div>
-      
-      <div style="text-align:center">
-        <div style="font-size:3rem;margin-bottom:1rem">🚀</div>
-        <h3 style="margin:0 0 0.5rem 0">Profile Boost</h3>
-        <p style="color:#6B7280;margin:0">Get up to 10x more profile views with monthly boosts</p>
-      </div>
-      
-      <div style="text-align:center">
-        <div style="font-size:3rem;margin-bottom:1rem">⭐</div>
-        <h3 style="margin:0 0 0.5rem 0">VIP Badge</h3>
-        <p style="color:#6B7280;margin:0">Stand out with exclusive premium badge on your profile</p>
-      </div>
-    </div>
-  </div>
-  
-  <!-- FAQ -->
-  <div style="background:#fff;border-radius:12px;padding:2rem">
-    <h2 style="text-align:center;margin-bottom:2rem;color:#1A1A2E">Frequently Asked Questions</h2>
-    
-    <div style="max-width:800px;margin:0 auto">
-      <details style="padding:1rem;border-bottom:1px solid #e0e0e0;cursor:pointer">
-        <summary style="font-weight:600;color:#1A1A2E">When will I be charged?</summary>
-        <p style="color:#6B7280;margin-top:0.5rem">You'll be charged immediately upon subscription activation. Subscriptions renew automatically every month unless canceled.</p>
-      </details>
-      
-      <details style="padding:1rem;border-bottom:1px solid #e0e0e0;cursor:pointer">
-        <summary style="font-weight:600;color:#1A1A2E">Can I cancel anytime?</summary>
-        <p style="color:#6B7280;margin-top:0.5rem">Yes! You can cancel anytime from your account settings. You'll keep access until the end of your billing period.</p>
-      </details>
-      
-      <details style="padding:1rem;border-bottom:1px solid #e0e0e0;cursor:pointer">
-        <summary style="font-weight:600;color:#1A1A2E">What payment methods do you accept?</summary>
-        <p style="color:#6B7280;margin-top:0.5rem">We accept all major credit cards (Visa, Mastercard, Amex) and debit cards through secure Stripe payment processing.</p>
-      </details>
-      
-      <details style="padding:1rem;cursor:pointer">
-        <summary style="font-weight:600;color:#1A1A2E">Do tokens expire?</summary>
-        <p style="color:#6B7280;margin-top:0.5rem">Free tokens refill daily. Purchased tokens don't expire as long as your account is active.</p>
-      </details>
-    </div>
+    <% }); %>
   </div>
   
 </div>
@@ -168,7 +77,7 @@ async function startCheckout(planType) {
     const response = await fetch('/payment/create-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ planType })
+      body: JSON.stringify({ planType: planType })
     });
     
     const data = await response.json();
@@ -176,11 +85,11 @@ async function startCheckout(planType) {
     if (data.success && data.url) {
       window.location.href = data.url;
     } else {
-      alert('Failed to start checkout: ' + (data.message || 'Unknown error'));
+      alert('Failed: ' + (data.message || 'Unknown error'));
     }
   } catch (error) {
     console.error('Checkout error:', error);
-    alert('Failed to start checkout. Please try again.');
+    alert('Failed to start checkout');
   }
 }
 
@@ -197,11 +106,11 @@ async function buyTokens(amount) {
     if (data.success && data.url) {
       window.location.href = data.url;
     } else {
-      alert('Failed to purchase tokens: ' + (data.message || 'Unknown error'));
+      alert('Failed: ' + (data.message || 'Unknown error'));
     }
   } catch (error) {
     console.error('Token purchase error:', error);
-    alert('Failed to purchase tokens. Please try again.');
+    alert('Failed to purchase tokens');
   }
 }
 </script>
