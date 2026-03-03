@@ -1,4 +1,4 @@
-// server.js - EthioMatch FINAL PRODUCTION READY (Profile Photo + Chat Media Upload)
+// server.js - EthioMatch FINAL PRODUCTION READY (Availability API + Duplicate Prevention)
 require('dotenv').config();
 
 // 🔍 GLOBAL ERROR CATCHER
@@ -54,7 +54,7 @@ const connectDB = async () => {
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith('psql ')) dbUrl = dbUrl.replace(/^psql\s+/, '');
     if (dbUrl.startsWith('postgresql://')) dbUrl = dbUrl.replace('postgresql://', 'postgres://');
-    if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
+    if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require&uselibpqcompat=true';
     
     await sequelize.authenticate();
     console.log('✅ Neon PostgreSQL Connected');
@@ -138,7 +138,7 @@ const limiter = rateLimit({
   max: 100,
   message: { success: false, message: 'Too many requests' }
 });
-app.use('/api/', limiter);
+app.use('/api/', limiter); // Rate limit API endpoints
 
 // ============================================
 // 🔐 CSRF TOKEN
@@ -330,11 +330,44 @@ app.get('/register', (req, res) => {
   }
 });
 
-// 📝 Register POST
+// ✅ API: Check Username/Email Availability (FOR FRONTEND VALIDATION)
+app.get('/api/check-availability', async (req, res) => {
+  try {
+    const { username, email } = req.query;
+    
+    if (!username && !email) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Provide username or email parameter' 
+      });
+    }
+    
+    const { checkAvailability } = require('./utils/userCheck');
+    const result = await checkAvailability({ username, email });
+    
+    res.json({
+      success: true,
+      usernameAvailable: result.usernameAvailable,
+      emailAvailable: result.emailAvailable,
+      errors: result.errors
+    });
+    
+  } catch (error) {
+    console.error('Availability API error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Availability check failed',
+      errors: ['Server error']
+    });
+  }
+});
+
+// 📝 Register POST - WITH DUPLICATE PREVENTION
 app.post('/register', async (req, res) => {
   try {
     const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
     
+    // Validate required fields
     if (!username || username.trim().length < 3) {
       req.flash('error', 'Username must be at least 3 characters');
       return res.redirect('/register');
@@ -350,6 +383,7 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
+    // Age validation
     const ageNumber = parseInt(String(age).trim(), 10);
     if (isNaN(ageNumber) || ageNumber < 18 || ageNumber > 100) {
       req.flash('error', 'You must be 18-100 years old');
@@ -371,20 +405,36 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    const existing = await User.findOne({
-      where: {
-        [Op.or]: [
-          { username: { [Op.iLike]: username.trim() } },
-          { email: { [Op.iLike]: email.toLowerCase() } }
-        ]
-      }
+    // ✅ CHECK FOR DUPLICATES BEFORE CREATING USER
+    const { checkUserExists } = require('./utils/userCheck');
+    const { exists, user: existingUser, error: checkError } = await checkUserExists({ 
+      username, 
+      email, 
+      onlyActive: false // Check even inactive accounts
     });
     
-    if (existing) {
-      req.flash('error', 'Username or email already exists');
+    if (checkError) {
+      console.error('Duplicate check failed:', checkError);
+      req.flash('error', 'Registration check failed. Please try again.');
       return res.redirect('/register');
     }
     
+    if (exists) {
+      // Determine which field conflicts
+      const usernameMatch = existingUser?.username?.toLowerCase() === username?.toLowerCase();
+      const emailMatch = existingUser?.email?.toLowerCase() === email?.toLowerCase();
+      
+      if (usernameMatch && emailMatch) {
+        req.flash('error', 'Username and email already registered');
+      } else if (usernameMatch) {
+        req.flash('error', 'Username already taken');
+      } else {
+        req.flash('error', 'Email already registered');
+      }
+      return res.redirect('/register');
+    }
+    
+    // Create user - PostgreSQL + Sequelize enforce constraints
     const user = await User.create({
       username: username.trim(),
       email: email.toLowerCase(),
@@ -394,6 +444,8 @@ app.post('/register', async (req, res) => {
       lookingFor: lookingFor,
       location: location || 'Ethiopia'
     });
+    
+    console.log('✅ User created:', user.username, 'Age:', user.age);
     
     req.flash('success', 'Account created! Please login.');
     res.redirect('/login');
@@ -415,48 +467,7 @@ app.post('/register', async (req, res) => {
     res.redirect('/register');
   }
 });
-// In your POST /register route
-app.post('/register', async (req, res) => {
-  try {
-    const { username, email, password, age, gender, lookingFor, location, terms } = req.body;
-    
-    // ✅ Check if user already exists BEFORE creating
-    const { checkUserExists } = require('./utils/userCheck');
-    const { exists, user: existingUser, error } = await checkUserExists({ 
-      username, 
-      email, 
-      onlyActive: false // Check even inactive accounts
-    });
-    
-    if (error) {
-      console.error('User check failed:', error);
-      req.flash('error', 'Registration check failed');
-      return res.redirect('/register');
-    }
-    
-    if (exists) {
-      // Determine which field conflicts
-      const usernameMatch = existingUser?.username?.toLowerCase() === username?.toLowerCase();
-      const emailMatch = existingUser?.email?.toLowerCase() === email?.toLowerCase();
-      
-      if (usernameMatch && emailMatch) {
-        req.flash('error', 'Username and email already registered');
-      } else if (usernameMatch) {
-        req.flash('error', 'Username already taken');
-      } else {
-        req.flash('error', 'Email already registered');
-      }
-      return res.redirect('/register');
-    }
-    
-    // ... rest of registration logic ...
-    
-  } catch (error) {
-    console.error('Register error:', error.message);
-    req.flash('error', 'Registration failed');
-    res.redirect('/register');
-  }
-});
+
 // 🚪 Logout
 app.get('/logout', (req, res) => {
   req.session.destroy((err) => {
@@ -596,7 +607,7 @@ app.get('/profile', async (req, res) => {
   }
 });
 
-// 👤 Profile POST - Update Profile Info
+// 👤 Profile POST
 app.post('/profile', async (req, res) => {
   try {
     if (!req.session.userId) {
@@ -604,7 +615,7 @@ app.post('/profile', async (req, res) => {
       return res.redirect('/login');
     }
     
-    const { bio, location, interests } = req.body;
+    const { bio, location, interests, profileImage } = req.body;
     const user = await User.findByPk(req.session.userId);
     
     if (!user) {
@@ -621,6 +632,10 @@ app.post('/profile', async (req, res) => {
         .map(i => i.trim())
         .filter(i => i.length > 0)
         .slice(0, 20);
+    }
+    
+    if (profileImage !== undefined && profileImage.startsWith('http')) {
+      user.profileImage = profileImage.substring(0, 255);
     }
     
     await user.save();
@@ -676,12 +691,10 @@ app.post('/profile/upload-photo',
         await deleteFromCloudinary(user.profileImagePublicId).catch(() => {});
       }
       
-      // Update user with new profile image
       user.profileImage = req.cloudinaryResult.url;
       user.profileImagePublicId = req.cloudinaryResult.publicId;
       await user.save();
       
-      // Update session
       req.session.user.profileImage = user.profileImage;
       
       console.log(`📸 Profile photo updated for ${user.username}`);
@@ -951,7 +964,7 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room - WITH MEDIA SUPPORT
+// 💬 Chat Room
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
@@ -1083,7 +1096,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
     res.json({
       success: true,
       message: 'Message sent!',
-      data: {
+       {
         id: message.id,
         content: message.content,
         senderId: message.senderId,
@@ -1101,7 +1114,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
   }
 });
 
-// 📸 Send Media Message (Image/Video)
+// 📸 Send Media Message
 app.post('/messages/:matchId/send-media', 
   upload.single('media'),
   uploadToCloudinaryMiddleware,
