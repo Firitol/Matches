@@ -27,23 +27,70 @@
     <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
     
     <!-- Profile Image -->
-    <div style="text-align:center;margin-bottom:2rem">
-      <div style="width:120px;height:120px;margin:0 auto 1rem;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center">
-        <% if (user.profileImage && user.profileImage.startsWith('http')) { %>
-          <img src="<%= user.profileImage %>" alt="<%= user.username %>" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=\\'font-size:3rem;color:white\\'>👤</span>'">
-        <% } else { %>
-          <span style="font-size:3rem;color:white">
-            <%= typeof getAvatarEmoji === 'function' ? getAvatarEmoji(user.username) : '👤' %>
-          </span>
-        <% } %>
-      </div>
-      <input type="url" name="profileImage" placeholder="https://example.com/photo.jpg" 
-             value="<%= user.profileImage || '' %>"
-             style="width:100%;max-width:400px;padding:0.75rem;border:2px solid #e0e0e0;border-radius:6px"
-             pattern="https?://.+">
-      <small style="color:#666">Enter image URL (optional)</small>
-    </div>
+    <!-- Profile Photo Upload Section -->
+<div style="text-align:center;margin-bottom:2rem">
+  <div style="width:120px;height:120px;margin:0 auto 1rem;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center">
+    <% if (user.profileImage && user.profileImage.startsWith('http')) { %>
+      <img src="<%= user.profileImage %>" alt="<%= user.username %>" style="width:100%;height:100%;object-fit:cover">
+    <% } else { %>
+      <span style="font-size:3rem;color:white"><%= typeof getAvatarEmoji === 'function' ? getAvatarEmoji(user.username) : '👤' %></span>
+    <% } %>
+  </div>
+  
+  <form id="profilePhotoForm" enctype="multipart/form-data" style="margin-top:1rem">
+    <input type="file" name="profilePhoto" id="profilePhotoInput" accept="image/*" style="display:none" onchange="uploadProfilePhoto()">
+    <button type="button" onclick="document.getElementById('profilePhotoInput').click()" style="padding:0.5rem 1rem;background:#26EAED;color:#1A1A2E;border:none;border-radius:6px;font-weight:600;cursor:pointer">
+      📸 Change Photo
+    </button>
+    <p id="uploadStatus" style="margin-top:0.5rem;font-size:0.875rem;color:#666"></p>
+  </form>
+</div>
+
+<script>
+async function uploadProfilePhoto() {
+  const fileInput = document.getElementById('profilePhotoInput');
+  const statusEl = document.getElementById('uploadStatus');
+  const file = fileInput.files[0];
+  
+  if (!file) return;
+  
+  // Validate file
+  if (file.size > 10 * 1024 * 1024) {
+    statusEl.textContent = '❌ File too large (max 10MB)';
+    statusEl.style.color = '#dc2626';
+    return;
+  }
+  
+  statusEl.textContent = '⏳ Uploading...';
+  statusEl.style.color = '#666';
+  
+  try {
+    const formData = new FormData();
+    formData.append('profilePhoto', file);
+    formData.append('uploadType', 'profile');
     
+    const response = await fetch('/profile/upload-photo', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      statusEl.textContent = '✅ Photo updated!';
+      statusEl.style.color = '#16a34a';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      statusEl.textContent = '❌ ' + data.message;
+      statusEl.style.color = '#dc2626';
+    }
+  } catch (error) {
+    console.error('Upload error:', error);
+    statusEl.textContent = '❌ Upload failed';
+    statusEl.style.color = '#dc2626';
+  }
+}
+</script>
     <!-- Bio -->
     <div style="margin-bottom:1.5rem">
       <label style="display:block;margin-bottom:0.5rem;font-weight:600">About Me</label>
