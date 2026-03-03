@@ -1,6 +1,6 @@
 // server.js - EthioMatch FINAL PRODUCTION READY (Persistent Messaging)
 require('dotenv').config();
-
+const { User, Match, Message } = require('./models');
 // 🔍 GLOBAL ERROR CATCHER
 process.on('uncaughtException', (err) => {
   console.error('💥 Uncaught Exception:', err.message);
