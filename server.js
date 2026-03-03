@@ -874,14 +874,14 @@ app.get('/messages', async (req, res) => {
   }
 });
 
-// 💬 Chat Room - SIMPLIFIED (No User Association Required)
+// 💬 Chat Room - FIXED (uses central models)
 app.get('/messages/:matchId', async (req, res) => {
   try {
     if (!req.session.userId) return res.redirect('/login');
     
     const { matchId } = req.params;
     
-    // Find match
+    // ✅ Use centrally imported models
     const match = await Match.findOne({
       where: {
         id: matchId,
@@ -898,18 +898,18 @@ app.get('/messages/:matchId', async (req, res) => {
     }
     
     if (match.status !== 'accepted') {
-      req.flash('info', `Wait for ${match.status === 'pending' ? 'mutual like' : 'match approval'} to start chatting`);
+      req.flash('info', 'Wait for mutual like to start chatting');
       return res.redirect('/matches');
     }
     
-    // ✅ Fetch messages WITHOUT User association
+    // ✅ Fetch messages
     const messages = await Message.findAll({
       where: { matchId: matchId },
       order: [['createdAt', 'ASC']],
       limit: 100
     });
     
-    // ✅ Get sender info separately (no association needed)
+    // ✅ Get sender info for each message
     const messagesWithSender = await Promise.all(
       messages.map(async (msg) => {
         const sender = await User.findByPk(msg.senderId, {
@@ -920,7 +920,6 @@ app.get('/messages/:matchId', async (req, res) => {
           content: msg.content,
           senderId: msg.senderId,
           senderName: sender?.username || 'Unknown',
-          senderImage: sender?.profileImage,
           createdAt: msg.createdAt,
           isRead: msg.isRead
         };
@@ -939,7 +938,7 @@ app.get('/messages/:matchId', async (req, res) => {
       }
     );
     
-    // Get other user info
+    // Get other user
     const otherUserId = match.user1Id === req.session.userId ? match.user2Id : match.user1Id;
     const otherUser = await User.findByPk(otherUserId, {
       attributes: ['id', 'username', 'profileImage']
@@ -967,6 +966,61 @@ app.get('/messages/:matchId', async (req, res) => {
     console.error('Chat room error:', error.message);
     console.error('Stack:', error.stack);
     res.redirect('/messages');
+  }
+});
+
+// 💬 Send Message - FIXED
+app.post('/messages/:matchId/send', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  try {
+    const { matchId } = req.params;
+    const { content } = req.body;
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'Message cannot be empty' });
+    }
+    
+    const match = await Match.findOne({
+      where: {
+        id: matchId,
+        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
+        status: 'accepted'
+      }
+    });
+    
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+    
+    const message = await Message.create({
+      matchId: matchId,
+      senderId: req.session.userId,
+      content: content.trim().substring(0, 1000)
+    });
+    
+    console.log(`📝 Message saved: ${req.session.username} → match ${matchId}`);
+    
+    await match.update({ updatedAt: new Date() });
+    
+    res.json({
+      success: true,
+      message: 'Message sent!',
+       {
+        id: message.id,
+        content: message.content,
+        senderId: message.senderId,
+        senderName: req.session.username,
+        createdAt: message.createdAt,
+        isRead: message.isRead
+      }
+    });
+    
+  } catch (error) {
+    console.error('Send message error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to send message' });
   }
 });
 
