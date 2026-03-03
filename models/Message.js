@@ -1,4 +1,4 @@
-// models/Message.js - NO ASSOCIATIONS (prevents circular dependency)
+// models/Message.js
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../lib/database');
 
@@ -20,10 +20,23 @@ const Message = sequelize.define('Message', {
   },
   content: {
     type: DataTypes.TEXT,
-    allowNull: false,
+    allowNull: true, // Allow null for media-only messages
     validate: {
-      len: [1, 1000]
+      len: [0, 1000]
     }
+  },
+  mediaType: {
+    type: DataTypes.STRING,
+    defaultValue: 'text',
+    field: 'mediaType',
+    validate: {
+      isIn: [['text', 'image', 'video']]
+    }
+  },
+  mediaUrl: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'mediaUrl'
   },
   isRead: {
     type: DataTypes.BOOLEAN,
@@ -42,6 +55,6 @@ const Message = sequelize.define('Message', {
   updatedAt: 'updatedAt'
 });
 
-// ✅ NO ASSOCIATIONS HERE - prevents circular dependency
+// NO ASSOCIATIONS HERE - handled in models/index.js
 
 module.exports = Message;
