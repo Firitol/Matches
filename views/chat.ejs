@@ -187,7 +187,8 @@ function updateTokenDisplay(tokens) {
   }
 }
 
-// Send text message
+// In chat.ejs, replace the send message handler with this:
+
 if (messageForm) {
   messageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -195,56 +196,62 @@ if (messageForm) {
     const content = messageInput.value.trim();
     if (!content) return;
     
-    // Check token balance before sending
+    console.log('📤 Sending message:', { content: content.substring(0, 50) + '...' });
+    
+    // Disable inputs while sending
+    messageInput.disabled = true;
+    const sendBtn = messageForm.querySelector('button');
+    if (sendBtn) sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+    
     try {
-      const tokenResponse = await fetch('/api/use-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      const tokenData = await tokenResponse.json();
-      
-      if (!tokenData.success) {
-        // No tokens available
-        const upgrade = confirm(tokenData.message + '\n\nWould you like to upgrade to Premium for unlimited messages?');
-        if (upgrade) {
-          window.location.href = '/premium';
-        }
-        return;
-      }
-      
-      // Token used successfully, send message
-      messageInput.disabled = true;
-      if (sendBtn) sendBtn.disabled = true;
-      
       const response = await fetch('/messages/' + matchId + '/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content: content })
       });
       
+      console.log('📥 Response status:', response.status);
+      
       const data = await response.json();
+      console.log('📥 Response data:', data);
       
       if (data.success) {
-        addMessageToUI(data.data);
+        console.log('✅ Message sent successfully');
+        addMessageToUI(data);
         messageInput.value = '';
-        updateTokenDisplay(tokenData.tokens);
+        
+        // Update token display if using tokens
+        if (typeof updateTokenDisplay === 'function' && data.tokens !== undefined) {
+          updateTokenDisplay(data.tokens);
+        }
       } else {
+        console.error('❌ Send failed:', data.message);
         showStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
+        
+        // Show upgrade prompt if tokens exhausted
+        if (data.message && data.message.includes('tokens')) {
+          if (confirm('No tokens available. Upgrade to Premium for unlimited messages?')) {
+            window.location.href = '/premium';
+          }
+        }
       }
     } catch (error) {
-      console.error('Send error:', error);
-      showStatus('Failed to send message. Please try again.', 'error');
+      console.error('❌ Network error:', error);
+      showStatus('Failed to send message. Check your connection.', 'error');
     } finally {
+      // Re-enable inputs
       messageInput.disabled = false;
-      if (sendBtn) sendBtn.disabled = false;
+      if (sendBtn) {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+      }
       messageInput.focus();
     }
   });
 }
-
 // Send media message
 async function sendMedia() {
   const file = mediaInput.files[0];
