@@ -1,4 +1,4 @@
-// server.js - EthioMatch PRODUCTION READY
+// server.js - EthioMatch PRODUCTION READY (With Token APIs)
 require('dotenv').config();
 
 process.on('uncaughtException', (err) => {
@@ -26,6 +26,7 @@ const constants = {
   APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
 };
 
+// Import only core models to avoid errors
 const { User, Match, Message, sequelize } = require('./models');
 
 // Database Connection
@@ -828,16 +829,9 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// Send Text Message - WITH DETAILED ERROR HANDLING
+// Send Text Message
 app.post('/messages/:matchId/send', async (req, res) => {
-  console.log('🔍 Send message request:', {
-    userId: req.session.userId,
-    matchId: req.params.matchId,
-    body: req.body
-  });
-  
   if (!req.session.userId) {
-    console.log('❌ Unauthorized: No session userId');
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   
@@ -845,36 +839,22 @@ app.post('/messages/:matchId/send', async (req, res) => {
     const { matchId } = req.params;
     const content = req.body.content;
     
-    // Validate content
     if (!content || content.trim().length === 0) {
-      console.log('❌ Validation failed: Empty content');
       return res.status(400).json({ success: false, message: 'Message cannot be empty' });
     }
     
-    // Check match exists and is accepted
-    const Match = require('./models').Match;
     const match = await Match.findOne({
       where: {
         id: matchId,
-        [Op.or]: [
-          { user1Id: req.session.userId },
-          { user2Id: req.session.userId }
-        ],
-        status: 'accepted'  // Must be accepted to chat
+        [Op.or]: [{ user1Id: req.session.userId }, { user2Id: req.session.userId }],
+        status: 'accepted'
       }
     });
     
-    console.log('🔍 Match lookup:', match ? 'Found' : 'Not found', '- Status:', match?.status);
-    
     if (!match) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Conversation not found or not accepted' 
-      });
+      return res.status(404).json({ success: false, message: 'Conversation not found or not accepted' });
     }
     
-    // Create message
-    const Message = require('./models').Message;
     const message = await Message.create({
       matchId: matchId,
       senderId: req.session.userId,
@@ -882,12 +862,8 @@ app.post('/messages/:matchId/send', async (req, res) => {
       mediaType: 'text'
     });
     
-    console.log('✅ Message created:', message.id);
-    
-    // Update match timestamp
     await match.update({ updatedAt: new Date() });
     
-    // Return response
     const responseData = {
       success: true,
       message: 'Message sent!',
@@ -901,24 +877,15 @@ app.post('/messages/:matchId/send', async (req, res) => {
       isRead: message.isRead
     };
     
-    console.log('✅ Response sent:', responseData.success);
     res.json(responseData);
     
   } catch (error) {
-    console.error('❌ Send message error:', {
-      message: error.message,
-      name: error.name,
-      stack: error.stack
-    });
-    
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to send message: ' + error.message 
-    });
+    console.error('Send message error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to send message: ' + error.message });
   }
 });
 
-// Send Media Message - USING VARIABLE (NO NESTED OBJECT)
+// Send Media Message
 app.post('/messages/:matchId/send-media', 
   upload.single('media'),
   uploadToCloudinaryMiddleware,
@@ -957,7 +924,6 @@ app.post('/messages/:matchId/send-media',
       
       await match.update({ updatedAt: new Date() });
       
-      // USING VARIABLE - NO NESTED OBJECT
       const responseData = {
         success: true,
         message: 'Media sent!',
@@ -979,24 +945,24 @@ app.post('/messages/:matchId/send-media',
     }
   }
 );
+
 // ============================================
-// 🪙 SIMPLE TOKEN API ROUTES (No Premium Logic)
+// 🪙 TOKEN API ROUTES (ADDED - BEFORE 404 HANDLER)
 // ============================================
 
-// Get Token Balance - Always returns "unlimited" for now
+// Get Token Balance - Returns unlimited for all users
 app.get('/api/token-balance', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   
-  // For now, all users have unlimited tokens
-  // You can add premium logic here later
+  // All users have unlimited tokens for now
   res.json({
     success: true,
-    tokens: 999,  // Unlimited
+    tokens: 999,
     totalTokens: 999,
     tokensUsed: 0,
-    planType: 'free',  // Can be updated later
+    planType: 'free',
     lastRefill: new Date(),
     message: 'Unlimited messages enabled'
   });
@@ -1008,22 +974,24 @@ app.post('/api/use-token', async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   
-  // For now, always allow message sending
+  // Always allow message sending for now
   res.json({
     success: true,
-    tokens: 999,  // Unlimited
+    tokens: 999,
     message: 'Token used (unlimited mode)'
   });
 });
 
-// 404 Handler
+// ============================================
+// 404 Handler (MUST COME AFTER ALL API ROUTES)
+// ============================================
+
 app.use((req, res) => {
   if (res.headersSent) return;
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
     error: { status: 404 }
-  //
   });
 });
 
