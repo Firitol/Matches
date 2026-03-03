@@ -823,7 +823,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// Send Text Message - FIXED
+// Send Text Message - FIXED WITH data: KEY
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -858,7 +858,6 @@ app.post('/messages/:matchId/send', async (req, res) => {
     
     await match.update({ updatedAt: new Date() });
     
-    // FIXED: Added "data:" key
     res.json({
       success: true,
       message: 'Message sent!',
@@ -880,7 +879,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
   }
 });
 
-// Send Media Message - FIXED
+// Send Media Message - FIXED WITH data: KEY
 app.post('/messages/:matchId/send-media', 
   upload.single('media'),
   uploadToCloudinaryMiddleware,
@@ -919,7 +918,6 @@ app.post('/messages/:matchId/send-media',
       
       await match.update({ updatedAt: new Date() });
       
-      // FIXED: Added "data:" key
       res.json({
         success: true,
         message: 'Media sent!',
