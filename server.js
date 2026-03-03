@@ -41,7 +41,12 @@ const connectDB = async () => {
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith('psql ')) dbUrl = dbUrl.replace(/^psql\s+/, '');
     if (dbUrl.startsWith('postgresql://')) dbUrl = dbUrl.replace('postgresql://', 'postgres://');
-    if (!dbUrl.includes('sslmode=')) dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
+    // Add SSL compatibility flag to prevent warning
+    if (!dbUrl.includes('sslmode=')) {
+      dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require&uselibpqcompat=true';
+    } else if (!dbUrl.includes('uselibpqcompat')) {
+      dbUrl += '&uselibpqcompat=true';
+    }
     
     await sequelize.authenticate();
     console.log('Neon PostgreSQL Connected');
@@ -823,7 +828,7 @@ app.get('/messages/:matchId', async (req, res) => {
   }
 });
 
-// Send Text Message - FIXED WITH data: KEY
+// Send Text Message - USING VARIABLE (NO NESTED OBJECT)
 app.post('/messages/:matchId/send', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -858,20 +863,21 @@ app.post('/messages/:matchId/send', async (req, res) => {
     
     await match.update({ updatedAt: new Date() });
     
-    res.json({
+    // USING VARIABLE - NO NESTED OBJECT
+    const responseData = {
       success: true,
       message: 'Message sent!',
-      data: {
-        id: message.id,
-        content: message.content,
-        senderId: message.senderId,
-        senderName: req.session.username,
-        mediaType: message.mediaType,
-        mediaUrl: message.mediaUrl,
-        createdAt: message.createdAt,
-        isRead: message.isRead
-      }
-    });
+      messageId: message.id,
+      content: message.content,
+      senderId: message.senderId,
+      senderName: req.session.username,
+      mediaType: message.mediaType,
+      mediaUrl: message.mediaUrl,
+      createdAt: message.createdAt,
+      isRead: message.isRead
+    };
+    
+    res.json(responseData);
     
   } catch (error) {
     console.error('Send message error:', error.message);
@@ -879,7 +885,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
   }
 });
 
-// Send Media Message - FIXED WITH data: KEY
+// Send Media Message - USING VARIABLE (NO NESTED OBJECT)
 app.post('/messages/:matchId/send-media', 
   upload.single('media'),
   uploadToCloudinaryMiddleware,
@@ -918,20 +924,21 @@ app.post('/messages/:matchId/send-media',
       
       await match.update({ updatedAt: new Date() });
       
-      res.json({
+      // USING VARIABLE - NO NESTED OBJECT
+      const responseData = {
         success: true,
         message: 'Media sent!',
-        data: {
-          id: message.id,
-          content: message.content,
-          senderId: message.senderId,
-          senderName: req.session.username,
-          mediaType: message.mediaType,
-          mediaUrl: message.mediaUrl,
-          createdAt: message.createdAt,
-          isRead: message.isRead
-        }
-      });
+        messageId: message.id,
+        content: message.content,
+        senderId: message.senderId,
+        senderName: req.session.username,
+        mediaType: message.mediaType,
+        mediaUrl: message.mediaUrl,
+        createdAt: message.createdAt,
+        isRead: message.isRead
+      };
+      
+      res.json(responseData);
       
     } catch (error) {
       console.error('Send media error:', error.message);
