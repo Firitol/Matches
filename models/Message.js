@@ -22,7 +22,7 @@ const Message = sequelize.define('Message', {
     type: DataTypes.TEXT,
     allowNull: false,
     validate: {
-      len: [1, 1000] // Max 1000 characters
+      len: [1, 1000]
     }
   },
   isRead: {
@@ -41,5 +41,38 @@ const Message = sequelize.define('Message', {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 });
+
+// ✅ IMPORTANT: Define associations INSIDE the Message model file
+// This ensures associations are loaded when Message is required
+
+const setupAssociations = () => {
+  const User = require('./User');
+  const Match = require('./Match');
+  
+  Message.belongsTo(User, { 
+    foreignKey: 'senderId', 
+    as: 'sender',
+    constraints: false
+  });
+  
+  Message.belongsTo(Match, { 
+    foreignKey: 'matchId', 
+    as: 'match',
+    constraints: false
+  });
+  
+  User.hasMany(Message, { 
+    foreignKey: 'senderId', 
+    as: 'sentMessages' 
+  });
+  
+  Match.hasMany(Message, { 
+    foreignKey: 'matchId', 
+    as: 'messages' 
+  });
+};
+
+// Setup associations immediately
+setupAssociations();
 
 module.exports = Message;
