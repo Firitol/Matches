@@ -1,4 +1,4 @@
-// server.js - EthioMatch PRODUCTION READY (With Express Router for APIs)
+// server.js - EthioMatch PRODUCTION READY
 require('dotenv').config();
 
 process.on('uncaughtException', (err) => {
@@ -26,7 +26,7 @@ const constants = {
   APP_TAGLINE: 'Find serious relationships with Ethiopians worldwide'
 };
 
-// Import only core models to avoid errors
+// Import only core models
 const { User, Match, Message, sequelize } = require('./models');
 
 // Database Connection
@@ -42,7 +42,6 @@ const connectDB = async () => {
     if (dbUrl.startsWith("'") && dbUrl.endsWith("'")) dbUrl = dbUrl.slice(1, -1);
     if (dbUrl.startsWith('psql ')) dbUrl = dbUrl.replace(/^psql\s+/, '');
     if (dbUrl.startsWith('postgresql://')) dbUrl = dbUrl.replace('postgresql://', 'postgres://');
-    // Add SSL compatibility flag to prevent warning
     if (!dbUrl.includes('sslmode=')) {
       dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require&uselibpqcompat=true';
     } else if (!dbUrl.includes('uselibpqcompat')) {
@@ -169,13 +168,13 @@ app.use(async (req, res, next) => {
 });
 
 // ============================================
-// 🚦 API ROUTES (Using Express Router)
+// API ROUTES (Using Express Router)
 // ============================================
 
 const apiRouter = express.Router();
 app.use('/api', apiRouter);
 
-// 🧪 API Test Route (for debugging)
+// API Test Route
 apiRouter.get('/test', (req, res) => {
   console.log('🔍 API TEST HIT at', new Date().toISOString());
   res.json({ 
@@ -186,7 +185,7 @@ apiRouter.get('/test', (req, res) => {
   });
 });
 
-// 🪙 Token API Routes
+// Token API Routes
 apiRouter.get('/token-balance', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -224,7 +223,7 @@ const apiLimiter = rateLimit({
 apiRouter.use(apiLimiter);
 
 // ============================================
-// 🚦 WEB ROUTES (Pages)
+// WEB ROUTES
 // ============================================
 
 // Health Check
@@ -561,7 +560,7 @@ app.post('/profile', async (req, res) => {
       return res.redirect('/login');
     }
     
-    const { bio, location, interests, profileImage } = req.body;
+    const { bio, location, interests } = req.body;
     const user = await User.findByPk(req.session.userId);
     
     if (!user) {
@@ -578,10 +577,6 @@ app.post('/profile', async (req, res) => {
         .map(function(i) { return i.trim(); })
         .filter(function(i) { return i.length > 0; })
         .slice(0, 20);
-    }
-    
-    if (profileImage !== undefined && profileImage.startsWith('http')) {
-      user.profileImage = profileImage.substring(0, 255);
     }
     
     await user.save();
@@ -617,23 +612,36 @@ app.post('/profile/upload-photo',
   upload.single('profilePhoto'),
   uploadToCloudinaryMiddleware,
   async (req, res) => {
+    console.log('📸 Profile photo upload request:', {
+      userId: req.session.userId,
+      hasFile: !!req.file,
+      hasCloudinaryResult: !!req.cloudinaryResult
+    });
+    
     if (!req.session.userId) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     
     try {
       if (!req.cloudinaryResult) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
+        console.error('❌ No cloudinary result');
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No file uploaded or upload failed. Check Cloudinary credentials.' 
+        });
       }
       
       const user = await User.findByPk(req.session.userId);
+      
       if (!user) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
       
       if (user.profileImagePublicId) {
         const { deleteFromCloudinary } = require('./lib/cloudinary');
-        await deleteFromCloudinary(user.profileImagePublicId).catch(() => {});
+        await deleteFromCloudinary(user.profileImagePublicId).catch(() => {
+          console.warn('⚠️ Failed to delete old profile image');
+        });
       }
       
       user.profileImage = req.cloudinaryResult.url;
@@ -642,6 +650,8 @@ app.post('/profile/upload-photo',
       
       req.session.user.profileImage = user.profileImage;
       
+      console.log('✅ Profile photo updated for:', user.username);
+      
       res.json({
         success: true,
         message: 'Profile photo updated successfully!',
@@ -649,8 +659,11 @@ app.post('/profile/upload-photo',
       });
       
     } catch (error) {
-      console.error('Profile photo upload error:', error.message);
-      res.status(500).json({ success: false, message: 'Failed to upload profile photo' });
+      console.error('❌ Profile photo upload error:', error.message);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to upload profile photo: ' + error.message 
+      });
     }
   }
 );
@@ -912,7 +925,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
     
     await match.update({ updatedAt: new Date() });
     
-    const responseData = {
+    res.json({
       success: true,
       message: 'Message sent!',
       messageId: message.id,
@@ -923,9 +936,7 @@ app.post('/messages/:matchId/send', async (req, res) => {
       mediaUrl: message.mediaUrl,
       createdAt: message.createdAt,
       isRead: message.isRead
-    };
-    
-    res.json(responseData);
+    });
     
   } catch (error) {
     console.error('Send message error:', error.message);
@@ -938,17 +949,28 @@ app.post('/messages/:matchId/send-media',
   upload.single('media'),
   uploadToCloudinaryMiddleware,
   async (req, res) => {
+    console.log('📸 Media message upload request:', {
+      userId: req.session.userId,
+      matchId: req.params.matchId,
+      hasFile: !!req.file,
+      hasCloudinaryResult: !!req.cloudinaryResult
+    });
+    
     if (!req.session.userId) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     
     try {
+      if (!req.cloudinaryResult) {
+        console.error('❌ No cloudinary result');
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No file uploaded or upload failed. Check Cloudinary credentials.' 
+        });
+      }
+      
       const { matchId } = req.params;
       const caption = req.body.caption;
-      
-      if (!req.cloudinaryResult) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
-      }
       
       const match = await Match.findOne({
         where: {
@@ -972,7 +994,9 @@ app.post('/messages/:matchId/send-media',
       
       await match.update({ updatedAt: new Date() });
       
-      const responseData = {
+      console.log('✅ Media message sent:', message.id);
+      
+      res.json({
         success: true,
         message: 'Media sent!',
         messageId: message.id,
@@ -983,13 +1007,11 @@ app.post('/messages/:matchId/send-media',
         mediaUrl: message.mediaUrl,
         createdAt: message.createdAt,
         isRead: message.isRead
-      };
-      
-      res.json(responseData);
+      });
       
     } catch (error) {
-      console.error('Send media error:', error.message);
-      res.status(500).json({ success: false, message: 'Failed to send media' });
+      console.error('❌ Send media error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to send media: ' + error.message });
     }
   }
 );
@@ -1001,12 +1023,10 @@ app.post('/messages/:matchId/send-media',
 app.use((req, res) => {
   if (res.headersSent) return;
   
-  // Return JSON 404 for API requests
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
-  // Return HTML 404 for web pages
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
@@ -1019,14 +1039,12 @@ app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   if (res.headersSent) return next(err);
   
-  // Return JSON error for API requests
   if (req.headers.accept && req.headers.accept.includes('application/json')) {
     return res.status(err.status || 500).json({
       error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
   }
   
-  // Return HTML error for web pages
   res.status(err.status || 500);
   try {
     res.render('error', {
