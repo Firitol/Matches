@@ -1,0 +1,24 @@
+<!-- public/icons/icon.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background Gradient -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="url(#grad)"/>
+  
+  <!-- Heart -->
+  <path d="M256 420C256 420 64 280 64 176C64 112 112 64 176 64C224 64 256 96 256 96C256 96 288 64 336 64C400 64 448 112 448 176C448 280 256 420 256 420Z" 
+        fill="white" 
+        stroke="white" 
+        stroke-width="4"/>
+  
+  <!-- Ethiopian Flag Colors Accent -->
+  <circle cx="256" cy="200" r="40" fill="#009A44"/>
+  <circle cx="256" cy="200" r="28" fill="#FEDD00"/>
+  <circle cx="256" cy="200" r="16" fill="#FF0000"/>
+</svg>
