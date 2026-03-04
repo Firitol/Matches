@@ -2,17 +2,25 @@
 const multer = require('multer');
 const { uploadToCloudinary } = require('../lib/cloudinary');
 
-// Memory storage for multer
+// Memory storage
 const storage = multer.memoryStorage();
 
-// File filter for images and videos
+// File filter
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime'
+  ];
   
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP images and MP4, WebM videos are allowed.'), false);
+    cb(new Error('Invalid file type. Allowed: JPG, PNG, GIF, WebP, MP4, WebM, MOV'), false);
   }
 };
 
@@ -20,7 +28,8 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB max
+    fileSize: 10 * 1024 * 1024, // 10MB max
+    files: 1
   },
   fileFilter: fileFilter
 });
@@ -32,8 +41,16 @@ const uploadToCloudinaryMiddleware = async (req, res, next) => {
       return next();
     }
     
+    console.log('📤 Uploading file:', {
+      originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+    
     const folder = req.body.uploadType === 'profile' ? 'ethiomatch/profiles' : 'ethiomatch/messages';
     const result = await uploadToCloudinary(req.file.buffer, folder);
+    
+    console.log('✅ Upload successful:', result.secure_url);
     
     req.cloudinaryResult = {
       url: result.secure_url,
@@ -43,8 +60,11 @@ const uploadToCloudinaryMiddleware = async (req, res, next) => {
     
     next();
   } catch (error) {
-    console.error('Cloudinary upload error:', error.message);
-    res.status(500).json({ success: false, message: 'Failed to upload file' });
+    console.error('❌ Cloudinary upload error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to upload file: ' + error.message 
+    });
   }
 };
 
