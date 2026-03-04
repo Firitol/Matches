@@ -1015,7 +1015,26 @@ app.post('/messages/:matchId/send-media',
     }
   }
 );
+// ============================================
+// PWA ROUTES
+// ============================================
 
+// Serve manifest.json
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.sendFile(path.join(__dirname, 'public', 'manifest.json'));
+});
+
+// Serve service worker
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
+// Serve icons
+app.get('/icons/:filename', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'icons', req.params.filename));
+});
 // ============================================
 // 404 Handler (MUST COME AFTER ALL ROUTES)
 // ============================================
