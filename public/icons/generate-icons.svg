@@ -1,0 +1,22 @@
+<!-- public/icons/generate-icons.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate PWA Icons</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  <h1>PWA Icon Generator</h1>
+  <p>Right-click the icon below → Save As → Save as icon-512x512.png</p>
+  <p>Then use an online tool like https://realfavicongenerator.net/ to generate all sizes</p>
+  
+  <div id="icon" style="width:512px;height:512px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:100px;display:flex;align-items:center;justify-content:center;font-size:300px;">
+    ❤️
+  </div>
+  
+  <script>
+    // You can also use https://www.figma.com/ or https://canva.com/ to create icons
+    // Recommended: 512x512 PNG with transparent background
+  </script>
+</body>
+</html>
