@@ -1,4 +1,4 @@
-// server.js - EthioMatch PRODUCTION READY (With Token APIs)
+// server.js - EthioMatch PRODUCTION READY (With Express Router for APIs)
 require('dotenv').config();
 
 process.on('uncaughtException', (err) => {
@@ -98,13 +98,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { success: false, message: 'Too many requests' }
-});
-app.use('/api/', limiter);
-
 // CSRF Token
 app.use((req, res, next) => {
   if (!res.locals.csrfToken) {
@@ -176,7 +169,62 @@ app.use(async (req, res, next) => {
 });
 
 // ============================================
-// ROUTES
+// 🚦 API ROUTES (Using Express Router)
+// ============================================
+
+const apiRouter = express.Router();
+app.use('/api', apiRouter);
+
+// 🧪 API Test Route (for debugging)
+apiRouter.get('/test', (req, res) => {
+  console.log('🔍 API TEST HIT at', new Date().toISOString());
+  res.json({ 
+    success: true, 
+    message: 'API router is working!', 
+    timestamp: new Date().toISOString(),
+    userId: req.session?.userId || 'not-logged-in'
+  });
+});
+
+// 🪙 Token API Routes
+apiRouter.get('/token-balance', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  res.json({
+    success: true,
+    tokens: 999,
+    totalTokens: 999,
+    tokensUsed: 0,
+    planType: 'free',
+    lastRefill: new Date(),
+    message: 'Unlimited messages enabled'
+  });
+});
+
+apiRouter.post('/use-token', async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  
+  res.json({
+    success: true,
+    tokens: 999,
+    message: 'Token used (unlimited mode)'
+  });
+});
+
+// Rate limit for API routes
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { success: false, message: 'Too many API requests' }
+});
+apiRouter.use(apiLimiter);
+
+// ============================================
+// 🚦 WEB ROUTES (Pages)
 // ============================================
 
 // Health Check
@@ -947,47 +995,18 @@ app.post('/messages/:matchId/send-media',
 );
 
 // ============================================
-// 🪙 TOKEN API ROUTES (ADDED - BEFORE 404 HANDLER)
-// ============================================
-
-// Get Token Balance - Returns unlimited for all users
-app.get('/api/token-balance', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  // All users have unlimited tokens for now
-  res.json({
-    success: true,
-    tokens: 999,
-    totalTokens: 999,
-    tokensUsed: 0,
-    planType: 'free',
-    lastRefill: new Date(),
-    message: 'Unlimited messages enabled'
-  });
-});
-
-// Use Token - Always succeeds for now
-app.post('/api/use-token', async (req, res) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
-  
-  // Always allow message sending for now
-  res.json({
-    success: true,
-    tokens: 999,
-    message: 'Token used (unlimited mode)'
-  });
-});
-
-// ============================================
-// 404 Handler (MUST COME AFTER ALL API ROUTES)
+// 404 Handler (MUST COME AFTER ALL ROUTES)
 // ============================================
 
 app.use((req, res) => {
   if (res.headersSent) return;
+  
+  // Return JSON 404 for API requests
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // Return HTML 404 for web pages
   res.status(404).render('error', {
     title: 'Page Not Found',
     message: 'The page you are looking for does not exist.',
@@ -999,11 +1018,15 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
   if (res.headersSent) return next(err);
+  
+  // Return JSON error for API requests
   if (req.headers.accept && req.headers.accept.includes('application/json')) {
     return res.status(err.status || 500).json({
       error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
     });
   }
+  
+  // Return HTML error for web pages
   res.status(err.status || 500);
   try {
     res.render('error', {
