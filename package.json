@@ -26,6 +26,7 @@
     "pg": "^8.11.5",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.1",
+    "socket.io": "^4.8.1",
     "stripe": "^14.10.0",
     "validator": "^13.12.0"
   },
@@ -36,7 +37,14 @@
   "engines": {
     "node": "20.x"
   },
-  "keywords": ["dating", "ethiopia", "relationships", "18+", "vercel", "neon"],
+  "keywords": [
+    "dating",
+    "ethiopia",
+    "relationships",
+    "18+",
+    "vercel",
+    "neon"
+  ],
   "author": "EthioMatch Team",
   "license": "MIT"
 }
