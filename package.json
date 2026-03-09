@@ -37,7 +37,14 @@
   "engines": {
     "node": "20.x"
   },
-  "keywords": ["dating", "ethiopia", "relationships", "18+", "vercel", "neon"],
+  "keywords": [
+    "dating",
+    "ethiopia",
+    "relationships",
+    "18+",
+    "vercel",
+    "neon"
+  ],
   "author": "EthioMatch Team",
   "license": "MIT"
 }
