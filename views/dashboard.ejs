@@ -159,13 +159,13 @@
 /* ... keep your original CSS as is ... */
 </style>
 
-<!-- Like/Pass + Socket.IO Scripts -->
-<script src="/socket.io/socket.io.js"></script>
+<!-- Like/Pass Scripts -->
 <script>
-  const socket = io();
-  socket.emit('join', '<%= user.id %>');
+  const socket = typeof window.io === 'function' ? window.io() : null;
+  if (socket) {
+    socket.emit('join', '<%= user.id %>');
 
-  socket.on('newMatch', (matchData) => {
+    socket.on('newMatch', (matchData) => {
     alert(`🎉 New Match! You matched with ${matchData.username}`);
     const matchesGrid = document.getElementById('matches-grid');
     if(matchesGrid) {
@@ -186,7 +186,8 @@
       `;
       matchesGrid.prepend(newCard);
     }
-  });
+    });
+  }
 
   async function likeUser(userId) {
     const btn = event.target;
