@@ -18,14 +18,6 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const flash = require('express-flash');
 const { Op } = require('sequelize');
-const { Server } = require("socket.io");
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ["GET", "POST"]
-  }
-});
-app.locals.io = io;
 const { Server } = require('socket.io');
 
 const app = express();
@@ -58,7 +50,6 @@ const isPreview = process.env.VERCEL_ENV === 'preview' || (process.env.VERCEL_UR
 const useMemoryStore = isPreview || process.env.USE_MEMORY_STORE === 'true';
 
 app.use(session({
-  store: useMemoryStore 
   store: useMemoryStore
     ? new session.MemoryStore()
     : new PostgreSQLStore({
@@ -87,8 +78,6 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false 
 
 // CSRF placeholder
 app.use((req, res, next) => {
-  res.locals.csrfToken = process.env.CSRF_SECRET 
-    ? require('crypto').randomBytes(32).toString('hex') 
   res.locals.csrfToken = process.env.CSRF_SECRET
     ? require('crypto').randomBytes(32).toString('hex')
     : 'dev-token';
@@ -129,7 +118,6 @@ app.use(async (req, res, next) => {
 });
 
 // Rate limiter
-const apiLimiter = rateLimit({ windowMs: 15*60*1000, max: 100, message: { success: false, message: 'Too many API requests' } });
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { success: false, message: 'Too many API requests' } });
 
 // API Router
@@ -149,8 +137,7 @@ const server = app.listen(process.env.PORT || 3000, () => {
   console.log(`${constants.APP_NAME} running on port ${process.env.PORT || 3000}`);
 });
 
-const io = new Server(server, {
-  cors: { origin: '*', methods: ["GET","POST"] }
+const io = new SocketIOServer(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
