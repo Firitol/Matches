@@ -1106,5 +1106,27 @@ process.on('SIGTERM', () => {
     process.exit(0);
   });
 });
+// Socket.IO for real-time matches
+const { Server } = require("socket.io");
+const io = new Server(server, {
+  cors: {
+    origin: '*', // restrict to your frontend in production
+    methods: ["GET", "POST"]
+  }
+});
 
+// attach io to app.locals so routes can access it
+app.locals.io = io;
+
+io.on("connection", (socket) => {
+  console.log("⚡ A user connected:", socket.id);
+
+  socket.on("join", (userId) => {
+    socket.join(`user_${userId}`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ User disconnected:", socket.id);
+  });
+});
 module.exports = app;
