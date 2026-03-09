@@ -156,9 +156,14 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 });
-app.locals.io = {
-  to: () => ({ emit: () => {} })
-};
+
+io.on('connection', (socket) => {
+  socket.on('join', (userId) => {
+    if (userId) socket.join(String(userId));
+  });
+});
+
+app.locals.io = io;
 
 io.on('connection', (socket) => {
   socket.on('join', (userId) => {
