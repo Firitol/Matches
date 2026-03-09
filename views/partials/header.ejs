@@ -16,6 +16,8 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/png" href="/icons/icon-192x192.png">
   <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="shortcut icon" href="/favicon.svg">
   
   <!-- Service Worker Registration -->
   <script>
@@ -41,22 +43,3 @@
   </style>
 </head>
 <body>
-  <nav style="background:#1A1A2E;color:white;padding:1rem;position:sticky;top:0;z-index:100">
-    <div style="max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center">
-      <a href="/" style="color:#26EAED;text-decoration:none;font-size:1.5rem;font-weight:700">🇪🇹 EthioMatch</a>
-      
-      <div style="display:flex;gap:1rem">
-        <% if (typeof user !== 'undefined' && user) { %>
-          <a href="/dashboard" style="color:white;text-decoration:none">Dashboard</a>
-          <a href="/messages" style="color:white;text-decoration:none">Messages</a>
-          <a href="/profile" style="color:white;text-decoration:none">Profile</a>
-          <a href="/logout" style="color:white;text-decoration:none">Logout</a>
-        <% } else { %>
-          <a href="/login" style="color:white;text-decoration:none">Login</a>
-          <a href="/register" style="color:white;text-decoration:none">Register</a>
-        <% } %>
-      </div>
-    </div>
-  </nav>
-  
-  <main>
