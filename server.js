@@ -18,7 +18,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const flash = require('express-flash');
 const { Op } = require('sequelize');
-const { Server } = require('socket.io');
+const { Server } = require("socket.io");
 
 const app = express();
 const constants = {
@@ -143,13 +143,6 @@ const io = new Server(server, {
     methods: ['GET', 'POST']
   }
 });
-
-io.on('connection', (socket) => {
-  socket.on('join', (userId) => {
-    if (userId) socket.join(String(userId));
-  });
-});
-
 app.locals.io = io;
 
 // ======================
