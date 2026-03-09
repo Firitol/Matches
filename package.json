@@ -11,7 +11,7 @@
     "vercel-build": "echo 'No build step required'"
   },
   "dependencies": {
-    "socket.io": "^4.9.1",
+    "socket.io": "^4.8.1",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.0",
     "connect-pg-simple": "^9.0.1",

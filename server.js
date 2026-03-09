@@ -19,13 +19,6 @@ const path = require('path');
 const flash = require('express-flash');
 const { Op } = require('sequelize');
 const { Server } = require("socket.io");
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ["GET", "POST"]
-  }
-});
-app.locals.io = io;
 
 const app = express();
 const constants = {
@@ -147,9 +140,7 @@ const server = app.listen(process.env.PORT || 3000, () => {
 const io = new Server(server, {
   cors: { origin: '*', methods: ["GET","POST"] }
 });
-app.locals.io = {
-  to: () => ({ emit: () => {} })
-};
+app.locals.io = io;
 
 // ======================
 // Graceful shutdown
