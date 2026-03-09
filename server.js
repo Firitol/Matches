@@ -694,20 +694,21 @@ app.get('/matches', async (req, res) => {
   }
 });
 
-// Like User
+// Like / Swipe a User
 app.post('/like/:userId', async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
-  
+
   try {
     const { userId } = req.params;
     const currentUserId = req.session.userId;
-    
+
     if (userId === currentUserId) {
       return res.status(400).json({ success: false, message: 'Cannot like yourself' });
     }
-    
+
+    // Find existing match between these two users
     let match = await Match.findOne({
       where: {
         [Op.or]: [
@@ -716,8 +717,9 @@ app.post('/like/:userId', async (req, res) => {
         ]
       }
     });
-    
+
     if (!match) {
+      // Create new pending match
       match = await Match.create({
         user1Id: currentUserId,
         user2Id: userId,
@@ -725,35 +727,46 @@ app.post('/like/:userId', async (req, res) => {
         status: 'pending'
       });
     } else {
-      if (!match.likedBy || !match.likedBy.includes(currentUserId)) {
-        if (!match.likedBy) match.likedBy = [];
-        match.likedBy.push(currentUserId);
-        await match.save();
-      }
-    }
-    
-    const isMutualLike = match.likedBy && match.likedBy.includes(currentUserId) && match.likedBy.includes(userId);
-    
-    if (isMutualLike && match.status !== 'accepted') {
-      match.status = 'accepted';
+      // Update likedBy array if not already included
+      if (!match.likedBy) match.likedBy = [];
+      if (!match.likedBy.includes(currentUserId)) match.likedBy.push(currentUserId);
       await match.save();
     }
-    
-    const isMatch = match.status === 'accepted';
-    
-    res.json({ 
-      success: true, 
-      isMatch: isMatch, 
+
+    // Check for mutual like
+    const isMutual = match.likedBy.includes(currentUserId) && match.likedBy.includes(userId);
+    if (isMutual && match.status !== 'accepted') {
+      match.status = 'accepted';
+      await match.save();
+
+      // Real-time notification via Socket.IO
+      const io = req.app.locals.io;
+      io.to(`user_${userId}`).emit('newMatch', {
+        matchId: match.id,
+        username: req.session.username,
+        profileImage: req.session.user?.profileImage || null
+      });
+      io.to(`user_${currentUserId}`).emit('newMatch', {
+        matchId: match.id,
+        username: 'You matched!',
+        profileImage: null
+      });
+    }
+
+    res.json({
+      success: true,
+      isMatch: match.status === 'accepted',
       matchId: match.id,
-      message: isMatch ? "It's a match! Start chatting now." : "Like sent! Wait for them to like you back." 
+      message: match.status === 'accepted'
+        ? "🎉 It's a match! Start chatting now."
+        : "Like sent! Wait for them to like you back."
     });
-    
+
   } catch (error) {
     console.error('Like error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to process like' });
   }
 });
-
 // Messages List
 app.get('/messages', async (req, res) => {
   try {
