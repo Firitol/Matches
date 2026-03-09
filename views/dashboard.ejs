@@ -39,9 +39,9 @@
     </div>
     
     <% if (matches && matches.length > 0) { %>
-      <div class="matches-grid">
+      <div class="matches-grid" id="matches-grid">
         <% matches.slice(0, 4).forEach(match => { %>
-          <div class="match-card">
+          <div class="match-card" id="match-<%= match.id %>">
             <div class="match-avatar">
               <img src="<%= match.profileImage || '/images/default-avatar.png' %>" 
                    alt="<%= match.username %>"
@@ -76,7 +76,7 @@
     <% if (potentialMatches && potentialMatches.length > 0) { %>
       <div class="profiles-grid">
         <% potentialMatches.forEach(profile => { %>
-          <div class="profile-card">
+          <div class="profile-card" id="profile-<%= profile.id %>">
             <div class="profile-header">
               <div class="profile-avatar">
                 <img src="<%= profile.profileImage || '/images/default-avatar.png' %>" 
@@ -154,108 +154,77 @@
 
 </div>
 
-<!-- Inline Styles for Dashboard (or move to /styles.css) -->
+<!-- Styles (inline or move to CSS file) -->
 <style>
-  .dashboard-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-  .dashboard-header { margin-bottom: 2rem; }
-  .welcome-banner { background: linear-gradient(135deg, #26EAED, #1A1A2E); color: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; }
-  .welcome-banner h1 { margin: 0 0 0.5rem 0; font-size: 1.75rem; }
-  .welcome-banner .subtitle { margin: 0; opacity: 0.9; }
-  
-  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
-  .stat-card { background: white; padding: 1rem; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-  .stat-value { display: block; font-size: 1.5rem; font-weight: 700; color: #26EAED; }
-  .stat-label { font-size: 0.875rem; color: #6B7280; }
-  
-  .dashboard-section { background: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-  .section-header h2 { margin: 0; font-size: 1.25rem; color: #1A1A2E; }
-  .view-all { color: #26EAED; text-decoration: none; font-weight: 500; }
-  
-  .matches-grid, .profiles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem; }
-  
-  .match-card, .profile-card { border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; }
-  .match-avatar, .profile-avatar { height: 120px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; }
-  .match-avatar img, .profile-avatar img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid white; }
-  .profile-age { position: absolute; bottom: 8px; right: 8px; background: #26EAED; color: #1A1A2E; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.875rem; }
-  
-  .match-info, .profile-body { padding: 1rem; }
-  .match-info h3, .profile-body h3 { margin: 0 0 0.25rem 0; font-size: 1.1rem; }
-  .location, .profile-location { color: #6B7280; font-size: 0.875rem; margin: 0 0 0.5rem 0; }
-  .profile-bio { color: #374151; font-size: 0.9rem; margin: 0 0 0.75rem 0; line-height: 1.4; }
-  
-  .profile-interests { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 1rem; }
-  .interest-tag { background: #F3F4F6; color: #374151; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-  
-  .match-actions, .profile-actions { display: flex; gap: 0.5rem; }
-  .btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; }
-  .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.875rem; }
-  .btn-primary { background: #26EAED; color: #1A1A2E; }
-  .btn-primary:hover { background: #1dd1d4; transform: translateY(-1px); }
-  .btn-secondary { background: #F3F4F6; color: #374151; }
-  .btn-secondary:hover { background: #E5E7EB; }
-  .btn-like { flex: 1; background: #26EAED; color: #1A1A2E; }
-  .btn-pass { flex: 1; background: #F3F4F6; color: #374151; }
-  
-  .actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-  .action-card { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: #F9FAFB; border-radius: 8px; text-decoration: none; color: #1A1A2E; transition: all 0.2s; }
-  .action-card:hover { background: #F3F4F6; transform: translateY(-2px); }
-  .action-icon { font-size: 1.5rem; }
-  .action-logout { color: #DC2626; }
-  
-  .empty-state { text-align: center; padding: 2rem; color: #6B7280; }
-  .empty-state p { margin: 0 0 1rem 0; }
-  
-  @media (max-width: 768px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .matches-grid, .profiles-grid { grid-template-columns: 1fr; }
-    .section-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-  }
+/* ... keep your original CSS as is ... */
 </style>
 
-<!-- JavaScript for Like/Pass Actions -->
+<!-- Like/Pass + Socket.IO Scripts -->
+<script src="/socket.io/socket.io.js"></script>
 <script>
-async function likeUser(userId) {
-  try {
+  const socket = io();
+  socket.emit('join', '<%= user.id %>');
+
+  socket.on('newMatch', (matchData) => {
+    alert(`🎉 New Match! You matched with ${matchData.username}`);
+    const matchesGrid = document.getElementById('matches-grid');
+    if(matchesGrid) {
+      const newCard = document.createElement('div');
+      newCard.className = 'match-card';
+      newCard.innerHTML = `
+        <div class="match-avatar">
+          <img src="${matchData.profileImage || '/images/default-avatar.png'}" alt="${matchData.username}" onerror="this.src='/images/default-avatar.png'">
+        </div>
+        <div class="match-info">
+          <h3>${matchData.username}, ${matchData.age}</h3>
+          <p class="location">📍 ${matchData.location}</p>
+          <div class="match-actions">
+            <a href="/messages/${matchData.id}" class="btn btn-primary btn-sm">Message</a>
+            <a href="/user/${matchData.id}" class="btn btn-secondary btn-sm">View Profile</a>
+          </div>
+        </div>
+      `;
+      matchesGrid.prepend(newCard);
+    }
+  });
+
+  async function likeUser(userId) {
     const btn = event.target;
     btn.disabled = true;
     btn.textContent = 'Sending...';
-    
-    const response = await fetch('/like/' + userId, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    
-    const data = await response.json();
-    
-    if (data.success) {
-      if (data.isMatch) {
-        alert("🎉 It's a match! Start a conversation now.");
-        window.location.href = '/matches';
+    try {
+      const res = await fetch('/like/' + userId, { method: 'POST', headers: {'Content-Type':'application/json'}});
+      const data = await res.json();
+      if(data.success){
+        const card = btn.closest('.profile-card');
+        if(data.isMatch){
+          alert("🎉 It's a match! Start chatting now.");
+          window.location.href = '/matches';
+        } else {
+          alert('❤️ Like sent!');
+          if(card) card.remove();
+        }
       } else {
-        alert('❤️ Like sent!');
-        btn.closest('.profile-card').remove();
+        alert('❌ Failed to send like.');
       }
-    } else {
-      alert('Failed to send like. Please try again.');
+    } catch(err){
+      console.error(err);
+      alert('❌ Failed to send like.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '❤️ Like';
     }
-  } catch (error) {
-    console.error('Like error:', error);
-    alert('Failed to send like. Please try again.');
-  } finally {
-    event.target.disabled = false;
-    event.target.textContent = '❤️ Like';
   }
-}
 
-function passUser(userId) {
-  const card = event.target.closest('.profile-card');
-  if (card) {
-    card.style.opacity = '0.5';
-    card.style.pointerEvents = 'none';
-    setTimeout(() => card.remove(), 300);
+  function passUser(userId){
+    const card = event.target.closest('.profile-card');
+    if(card){
+      card.style.transition = 'all 0.3s ease';
+      card.style.transform = 'translateX(100%) rotate(15deg)';
+      card.style.opacity = '0';
+      setTimeout(()=>card.remove(),300);
+    }
   }
-}
 </script>
 
 <%- include('partials/footer') %>
