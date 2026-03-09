@@ -18,7 +18,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const flash = require('express-flash');
 const { Op } = require('sequelize');
-const EventEmitter = require('events');
+const { Server } = require("socket.io");
 
 const app = express();
 const constants = {
@@ -137,14 +137,10 @@ const server = app.listen(process.env.PORT || 3000, () => {
   console.log(`${constants.APP_NAME} running on port ${process.env.PORT || 3000}`);
 });
 
-const realtimeBus = new EventEmitter();
-app.locals.io = {
-  to: (room) => ({
-    emit: (event, payload) => realtimeBus.emit(`${room}:${event}`, payload)
-  }),
-  emit: (event, payload) => realtimeBus.emit(event, payload),
-  on: (event, listener) => realtimeBus.on(event, listener)
-};
+const io = new Server(server, {
+  cors: { origin: '*', methods: ["GET","POST"] }
+});
+app.locals.io = io;
 
 // ======================
 // Graceful shutdown
