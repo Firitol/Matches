@@ -35,8 +35,11 @@ const connectDB = async () => {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL not set');
     await sequelize.authenticate();
     console.log('Neon PostgreSQL Connected');
-    await sequelize.sync({ alter: true });
-    console.log('Database tables synced');
+    const shouldSync = process.env.DB_SYNC === 'true';
+    if (shouldSync) {
+      await sequelize.sync({ alter: false });
+      console.log('Database tables synced');
+    }
     return sequelize;
   } catch (error) {
     console.error('Database connection error:', error.message);
@@ -47,7 +50,8 @@ connectDB();
 
 // Session Configuration
 const isPreview = process.env.VERCEL_ENV === 'preview' || (process.env.VERCEL_URL?.includes('vercel.app'));
-const useMemoryStore = isPreview || process.env.USE_MEMORY_STORE === 'true';
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
+const useMemoryStore = isPreview || process.env.USE_MEMORY_STORE === 'true' || !hasDatabaseUrl;
 
 app.use(session({
   store: useMemoryStore
@@ -137,20 +141,12 @@ const server = app.listen(process.env.PORT || 3000, () => {
   console.log(`${constants.APP_NAME} running on port ${process.env.PORT || 3000}`);
 });
 
-const io = new SocketIOServer(server, {
+const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
   }
 });
-
-io.on('connection', (socket) => {
-  socket.on('join', (userId) => {
-    if (userId) socket.join(String(userId));
-  });
-});
-
-app.locals.io = io;
 
 io.on('connection', (socket) => {
   socket.on('join', (userId) => {
